@@ -9,10 +9,13 @@ import {
   Platform,
   ScrollView,
   Image,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigation';
 import * as ImagePicker from 'expo-image-picker';
+import authService from '../../api/services/authService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
@@ -29,23 +32,56 @@ export const RegisterScreen = ({ navigation }: Props) => {
     sector: '0', // Default sector
   });
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-    });
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant permission to access your photos');
+        return;
+      }
 
-    if (!result.canceled) {
-      setProfilePicture(result.assets[0].uri);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+
+      if (!result.canceled) {
+        setProfilePicture(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image');
     }
   };
 
   const handleRegister = async () => {
-    // TODO: Implement registration logic using the API
-    console.log('Register attempt:', { ...formData, profilePicture });
+    // Validate required fields
+    const requiredFields = ['username', 'password', 'firstName', 'lastName', 'email'];
+    const missingFields = requiredFields.filter(field => !formData[field as keyof typeof formData]);
+    
+    if (missingFields.length > 0) {
+      Alert.alert('Error', `Please fill in all required fields: ${missingFields.join(', ')}`);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const { userId } = await authService.register({
+        ...formData,
+        profilePicture: profilePicture || undefined,
+      });
+      navigation.navigate('VerifyEmail', { userId });
+    } catch (error: any) {
+      Alert.alert(
+        'Registration Failed',
+        error.response?.data?.message || 'An error occurred during registration'
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -57,7 +93,11 @@ export const RegisterScreen = ({ navigation }: Props) => {
         <View style={styles.formContainer}>
           <Text style={styles.title}>Create Account</Text>
 
-          <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+          <TouchableOpacity 
+            style={styles.imagePicker} 
+            onPress={pickImage}
+            disabled={isLoading}
+          >
             {profilePicture ? (
               <Image source={{ uri: profilePicture }} style={styles.profileImage} />
             ) : (
@@ -69,41 +109,46 @@ export const RegisterScreen = ({ navigation }: Props) => {
 
           <TextInput
             style={styles.input}
-            placeholder="Username"
+            placeholder="Username *"
             value={formData.username}
             onChangeText={(text) => setFormData({ ...formData, username: text })}
             autoCapitalize="none"
+            editable={!isLoading}
           />
 
           <TextInput
             style={styles.input}
-            placeholder="Password"
+            placeholder="Password *"
             value={formData.password}
             onChangeText={(text) => setFormData({ ...formData, password: text })}
             secureTextEntry
+            editable={!isLoading}
           />
 
           <TextInput
             style={styles.input}
-            placeholder="First Name"
+            placeholder="First Name *"
             value={formData.firstName}
             onChangeText={(text) => setFormData({ ...formData, firstName: text })}
+            editable={!isLoading}
           />
 
           <TextInput
             style={styles.input}
-            placeholder="Last Name"
+            placeholder="Last Name *"
             value={formData.lastName}
             onChangeText={(text) => setFormData({ ...formData, lastName: text })}
+            editable={!isLoading}
           />
 
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder="Email *"
             value={formData.email}
             onChangeText={(text) => setFormData({ ...formData, email: text })}
             keyboardType="email-address"
             autoCapitalize="none"
+            editable={!isLoading}
           />
 
           <TextInput
@@ -112,6 +157,7 @@ export const RegisterScreen = ({ navigation }: Props) => {
             value={formData.phoneNumber}
             onChangeText={(text) => setFormData({ ...formData, phoneNumber: text })}
             keyboardType="phone-pad"
+            editable={!isLoading}
           />
 
           <TextInput
@@ -120,15 +166,25 @@ export const RegisterScreen = ({ navigation }: Props) => {
             value={formData.group}
             onChangeText={(text) => setFormData({ ...formData, group: text })}
             keyboardType="number-pad"
+            editable={!isLoading}
           />
 
-          <TouchableOpacity style={styles.button} onPress={handleRegister}>
-            <Text style={styles.buttonText}>Register</Text>
+          <TouchableOpacity 
+            style={[styles.button, isLoading && styles.buttonDisabled]} 
+            onPress={handleRegister}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Register</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.linkButton}
             onPress={() => navigation.navigate('Login')}
+            disabled={isLoading}
           >
             <Text style={styles.linkText}>
               Already have an account? Login here
@@ -170,27 +226,31 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#ddd',
+    backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   placeholderText: {
     color: '#666',
+    fontSize: 14,
   },
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 15,
     fontSize: 16,
   },
   button: {
     backgroundColor: '#007AFF',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     marginTop: 10,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: '#fff',
@@ -203,7 +263,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     color: '#007AFF',
-    fontSize: 16,
+    fontSize: 14,
   },
 });
 

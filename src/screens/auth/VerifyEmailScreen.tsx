@@ -7,19 +7,42 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigation';
+import authService from '../../api/services/authService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VerifyEmail'>;
 
 export const VerifyEmailScreen = ({ route, navigation }: Props) => {
   const { userId } = route.params;
   const [code, setCode] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleVerify = async () => {
-    // TODO: Implement email verification logic using the API
-    console.log('Verify email attempt:', { userId, code });
+    if (!code) {
+      Alert.alert('Error', 'Please enter the verification code');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await authService.verifyEmail(userId, code);
+      Alert.alert(
+        'Success',
+        'Email verified successfully. You can now login.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+      );
+    } catch (error: any) {
+      Alert.alert(
+        'Verification Failed',
+        error.response?.data?.message || 'An error occurred during verification'
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -41,15 +64,25 @@ export const VerifyEmailScreen = ({ route, navigation }: Props) => {
           onChangeText={setCode}
           keyboardType="number-pad"
           maxLength={6}
+          editable={!isLoading}
         />
 
-        <TouchableOpacity style={styles.button} onPress={handleVerify}>
-          <Text style={styles.buttonText}>Verify Email</Text>
+        <TouchableOpacity 
+          style={[styles.button, isLoading && styles.buttonDisabled]} 
+          onPress={handleVerify}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Verify Email</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.linkButton}
           onPress={() => navigation.navigate('Login')}
+          disabled={isLoading}
         >
           <Text style={styles.linkText}>Back to Login</Text>
         </TouchableOpacity>
@@ -65,8 +98,8 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     flex: 1,
-    padding: 20,
     justifyContent: 'center',
+    padding: 20,
   },
   title: {
     fontSize: 24,
@@ -84,7 +117,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 20,
     fontSize: 16,
     textAlign: 'center',
@@ -93,8 +126,11 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: '#007AFF',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: '#fff',
@@ -107,7 +143,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     color: '#007AFF',
-    fontSize: 16,
+    fontSize: 14,
   },
 });
 
