@@ -98,16 +98,24 @@ export const RegisterScreen = ({ navigation }: Props) => {
 
     try {
       setIsLoading(true);
-      const { userId } = await authService.register({
+      console.log('Starting registration process...');
+      
+      const response = await authService.register({
         ...formData,
         profilePicture: profilePicture || undefined,
       });
-      navigation.navigate('VerifyEmail', { userId });
+
+      console.log('Registration successful, response received');
+      
+      // If we get here, registration was successful and tokens are stored
+      // The RootNavigator will handle the navigation based on auth state
     } catch (error: any) {
-      console.error('Registration error:', {
+      console.error('Registration screen error:', {
         message: error.message,
         response: error.response?.data,
-        status: error.response?.status
+        status: error.response?.status,
+        isAxiosError: error.isAxiosError,
+        code: error.code
       });
 
       if (error.response?.status === 400) {
@@ -129,8 +137,12 @@ export const RegisterScreen = ({ navigation }: Props) => {
         }
         
         setError(errorMessage);
+      } else if (error.message === 'Invalid response from server: Missing tokens') {
+        setError('Registration was successful but server response was invalid. Please try logging in.');
+      } else if (error.code === 'ECONNABORTED') {
+        setError('Request timed out. Please check your internet connection and try again.');
       } else {
-        setError(error.response?.data?.message || 'An error occurred during registration');
+        setError(error.response?.data?.message || 'An error occurred during registration. Please try again.');
       }
     } finally {
       setIsLoading(false);

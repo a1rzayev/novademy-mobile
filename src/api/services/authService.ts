@@ -26,15 +26,8 @@ export interface RegisterData {
 }
 
 export interface AuthResponse {
-  token: string;
-  user: {
-    id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    roleId: string;
-  };
+  accessToken: string;
+  refreshToken: string;
 }
 
 class AuthService {
@@ -48,11 +41,12 @@ class AuthService {
         'Content-Type': 'multipart/form-data',
       },
     });
-    await AsyncStorage.setItem('authToken', response.data.token);
+    await AsyncStorage.setItem('authToken', response.data.accessToken);
+    await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
     return response.data;
   }
 
-  async register(data: RegisterData): Promise<{ userId: string }> {
+  async register(data: RegisterData): Promise<AuthResponse> {
     const formData = new FormData();
     
     // Append all text fields with proper casing to match API model
@@ -77,12 +71,50 @@ class AuthService {
       } as any);
     }
 
-    const response = await apiClient.post<{ userId: string }>('/auth/register', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+    try {
+      console.log('Sending registration request with data:', {
+        username: data.username,
+        email: data.email,
+        roleId: data.roleId,
+        group: data.group,
+        sector: data.sector,
+        hasProfilePicture: !!data.profilePicture
+      });
+
+      const response = await apiClient.post<AuthResponse>('/auth/register', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      console.log('Registration response:', {
+        status: response.status,
+        hasAccessToken: !!response.data?.accessToken,
+        hasRefreshToken: !!response.data?.refreshToken
+      });
+
+      if (!response.data?.accessToken || !response.data?.refreshToken) {
+        throw new Error('Invalid response from server: Missing tokens');
+      }
+
+      // Store the tokens
+      await AsyncStorage.setItem('authToken', response.data.accessToken);
+      await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('Registration service error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers,
+        }
+      });
+      throw error;
+    }
   }
 
   async verifyEmail(userId: string, code: string): Promise<void> {
@@ -91,6 +123,7 @@ class AuthService {
 
   async logout(): Promise<void> {
     await AsyncStorage.removeItem('authToken');
+    await AsyncStorage.removeItem('refreshToken');
   }
 
   async getCurrentUser(): Promise<AuthResponse['user'] | null> {
