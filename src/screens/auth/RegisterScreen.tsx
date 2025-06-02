@@ -38,7 +38,7 @@ const validateEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
-export const RegisterScreen = ({ navigation }: Props) => {
+const RegisterScreen = ({ navigation }: Props) => {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -46,8 +46,8 @@ export const RegisterScreen = ({ navigation }: Props) => {
     lastName: '',
     email: '',
     phoneNumber: '',
-    roleId: 3, // Changed to match web version
-    group: 1, // Default to 1 like web version
+    roleId: 3, // Student role
+    group: 1,
     sector: SectorType.Azerbaijani,
   });
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
@@ -78,71 +78,87 @@ export const RegisterScreen = ({ navigation }: Props) => {
     }
   };
 
+  const validateForm = () => {
+    const errors: string[] = [];
+
+    if (!formData.username.trim()) {
+      errors.push('Username is required');
+    } else if (formData.username.length < 3) {
+      errors.push('Username must be at least 3 characters long');
+    }
+
+    if (!formData.password) {
+      errors.push('Password is required');
+    } else if (formData.password.length < 6) {
+      errors.push('Password must be at least 6 characters long');
+    }
+
+    if (!formData.firstName.trim()) {
+      errors.push('First name is required');
+    }
+
+    if (!formData.lastName.trim()) {
+      errors.push('Last name is required');
+    }
+
+    if (!formData.email.trim()) {
+      errors.push('Email is required');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.push('Please enter a valid email address');
+    }
+
+    if (!formData.phoneNumber.trim()) {
+      errors.push('Phone number is required');
+    } else if (!/^0?\d{9}$/.test(formData.phoneNumber.replace(/\s+/g, ''))) {
+      errors.push('Phone number must be exactly 9 digits, optionally starting with 0');
+    }
+
+    return errors;
+  };
+
   const handleRegister = async () => {
     setError(null);
     
-    // Validate required fields
-    const requiredFields = ['username', 'password', 'firstName', 'lastName', 'email', 'phoneNumber'];
-    const missingFields = requiredFields.filter(field => !formData[field as keyof typeof formData]);
-    
-    if (missingFields.length > 0) {
-      setError(`Please fill in all required fields: ${missingFields.join(', ')}`);
-      return;
-    }
-
-    // Validate email format
-    if (!validateEmail(formData.email)) {
-      setError('Please enter a valid email address');
+    const validationErrors = validateForm();
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join('\n'));
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log('Starting registration process...');
+      console.log('Starting registration with data:', {
+        ...formData,
+        hasProfilePicture: !!profilePicture
+      });
       
       const response = await authService.register({
         ...formData,
         profilePicture: profilePicture || undefined,
       });
 
-      console.log('Registration successful, response received');
-      
-      // If we get here, registration was successful and tokens are stored
-      // The RootNavigator will handle the navigation based on auth state
+      console.log('Registration successful, navigating to email verification');
+      navigation.navigate('EmailVerification', { 
+        email: formData.email,
+        userId: response.id 
+      });
     } catch (error: any) {
-      console.error('Registration screen error:', {
+      console.error('Registration error:', {
         message: error.message,
         response: error.response?.data,
-        status: error.response?.status,
-        isAxiosError: error.isAxiosError,
-        code: error.code
+        status: error.response?.status
       });
 
       if (error.response?.status === 400) {
-        // Handle validation errors
-        const errors = error.response.data.errors;
-        let errorMessage = 'Please fix the following errors:\n\n';
-        
-        if (errors?.Email) {
-          errorMessage += `Email: ${errors.Email.join(', ')}\n`;
-        }
-        if (errors?.Username) {
-          errorMessage += `Username: ${errors.Username.join(', ')}\n`;
-        }
-        if (errors?.Password) {
-          errorMessage += `Password: ${errors.Password.join(', ')}\n`;
-        }
-        if (errors?.PhoneNumber) {
-          errorMessage += `Phone Number: ${errors.PhoneNumber.join(', ')}\n`;
-        }
-        
-        setError(errorMessage);
-      } else if (error.message === 'Invalid response from server: Missing tokens') {
-        setError('Registration was successful but server response was invalid. Please try logging in.');
-      } else if (error.code === 'ECONNABORTED') {
-        setError('Request timed out. Please check your internet connection and try again.');
+        const errors = error.response.data.errors || {};
+        const errorMessages = Object.entries(errors)
+          .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)
+          .join('\n');
+        setError(errorMessages || 'Please check your input and try again');
+      } else if (error.response?.status === 409) {
+        setError('Username, email, or phone number already exists');
       } else {
-        setError(error.response?.data?.message || 'An error occurred during registration. Please try again.');
+        setError(error.response?.data?.message || 'Registration failed. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -250,8 +266,16 @@ export const RegisterScreen = ({ navigation }: Props) => {
             <TextInput
               style={styles.input}
               value={formData.phoneNumber}
-              onChangeText={(text) => setFormData({ ...formData, phoneNumber: text })}
+              onChangeText={(text) => {
+                // Only allow digits and optionally a leading 0
+                const cleaned = text.replace(/[^\d]/g, '');
+                if (cleaned.length <= 10 && (cleaned.length === 0 || cleaned[0] === '0' || cleaned.length <= 9)) {
+                  setFormData({ ...formData, phoneNumber: cleaned });
+                }
+              }}
               keyboardType="phone-pad"
+              maxLength={10}
+              placeholder="Enter 9 digits (e.g., 0123456789)"
               editable={!isLoading}
             />
           </View>
