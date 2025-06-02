@@ -174,9 +174,9 @@ const RegisterScreen = ({ navigation }: Props) => {
         
         // Navigate after a short delay to allow the success toast to be seen
         setTimeout(() => {
-          navigation.navigate('VerifyEmail', { 
-            userId: response.id.toLowerCase(),
-            email: formData.email.toLowerCase()
+          navigation.navigate('EmailVerification', { 
+            email: formData.email.toLowerCase(),
+            userId: response.id.toLowerCase()
           });
         }, 1500);
 
