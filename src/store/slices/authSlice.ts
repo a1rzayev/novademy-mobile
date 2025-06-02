@@ -80,12 +80,39 @@ export const register = createAsyncThunk(
 
 export const verifyEmail = createAsyncThunk(
   'auth/verifyEmail',
-  async (token: string, { rejectWithValue }) => {
+  async ({ userId, code }: { userId: string; code: string }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post('/auth/verify-email', { token });
+      console.log('Verifying email with:', { userId, code });
+      
+      // Ensure userId is a valid GUID format
+      const formattedUserId = userId.toLowerCase().trim();
+      
+      const response = await apiClient.post('/auth/verify-email', {
+        request: {
+          userId: formattedUserId,
+          code: code.trim()
+        }
+      });
+      
       return response.data;
     } catch (error: any) {
       console.error('Verify email error:', error);
+      if (error.response?.data?.errors) {
+        // Format the error messages to be more user-friendly
+        const errors = error.response.data.errors;
+        const errorMessages = Object.entries(errors)
+          .map(([field, messages]) => {
+            if (field === '$.userId') {
+              return 'Invalid user ID format';
+            }
+            if (field === 'request') {
+              return 'Invalid verification request';
+            }
+            return `${field}: ${(messages as string[]).join(', ')}`;
+          })
+          .join('\n');
+        return rejectWithValue(errorMessages);
+      }
       return rejectWithValue(error.response?.data?.message || 'Email verification failed');
     }
   }
