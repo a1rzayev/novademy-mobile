@@ -18,6 +18,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigation';
 import * as ImagePicker from 'expo-image-picker';
 import authService, { SectorType } from '../../api/services/authService';
+import Toast from 'react-native-toast-message';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
@@ -52,8 +53,19 @@ const RegisterScreen = ({ navigation }: Props) => {
   });
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  const showToast = (type: 'success' | 'error' | 'warning', message: string) => {
+    Toast.show({
+      type,
+      text1: type === 'success' ? 'Success' : type === 'warning' ? 'Warning' : 'Error',
+      text2: message,
+      position: 'top',
+      visibilityTime: 4000,
+      autoHide: true,
+      topOffset: Platform.OS === 'ios' ? 50 : 30,
+    });
+  };
 
   const pickImage = async () => {
     try {
@@ -78,88 +90,145 @@ const RegisterScreen = ({ navigation }: Props) => {
     }
   };
 
+  const validatePassword = (password: string): boolean => {
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasDigit = /\d/.test(password);
+    return hasUpperCase && hasLowerCase && hasDigit;
+  };
+
   const validateForm = () => {
     const errors: string[] = [];
 
-    if (!formData.username.trim()) {
-      errors.push('Username is required');
-    } else if (formData.username.length < 3) {
-      errors.push('Username must be at least 3 characters long');
-    }
+    try {
+      if (!formData.username.trim()) {
+        errors.push('Username is required');
+      } else if (formData.username.length < 3) {
+        errors.push('Username must be at least 3 characters long');
+      }
 
-    if (!formData.password) {
-      errors.push('Password is required');
-    } else if (formData.password.length < 6) {
-      errors.push('Password must be at least 6 characters long');
-    }
+      if (!formData.password) {
+        errors.push('Password is required');
+      } else if (formData.password.length < 6) {
+        errors.push('Password must be at least 6 characters long');
+      } else if (!validatePassword(formData.password)) {
+        errors.push('Password must contain at least one uppercase letter, one lowercase letter, and one digit');
+      }
 
-    if (!formData.firstName.trim()) {
-      errors.push('First name is required');
-    }
+      if (!formData.firstName.trim()) {
+        errors.push('First name is required');
+      }
 
-    if (!formData.lastName.trim()) {
-      errors.push('Last name is required');
-    }
+      if (!formData.lastName.trim()) {
+        errors.push('Last name is required');
+      }
 
-    if (!formData.email.trim()) {
-      errors.push('Email is required');
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.push('Please enter a valid email address');
-    }
+      if (!formData.email.trim()) {
+        errors.push('Email is required');
+      } else if (!validateEmail(formData.email)) {
+        errors.push('Please enter a valid email address');
+      }
 
-    if (!formData.phoneNumber.trim()) {
-      errors.push('Phone number is required');
-    } else if (!/^0?\d{9}$/.test(formData.phoneNumber.replace(/\s+/g, ''))) {
-      errors.push('Phone number must be exactly 9 digits, optionally starting with 0');
-    }
+      if (!formData.phoneNumber.trim()) {
+        errors.push('Phone number is required');
+      } else if (!/^0?\d{9}$/.test(formData.phoneNumber.replace(/\s+/g, ''))) {
+        errors.push('Phone number must be exactly 9 digits, optionally starting with 0');
+      }
 
-    return errors;
+      return errors;
+    } catch (error) {
+      console.error('Form validation error:', error);
+      return ['An error occurred while validating the form'];
+    }
   };
 
   const handleRegister = async () => {
-    setError(null);
-    
-    const validationErrors = validateForm();
-    if (validationErrors.length > 0) {
-      setError(validationErrors.join('\n'));
-      return;
-    }
-
     try {
+      // Validate form
+      const validationErrors = validateForm();
+      if (validationErrors.length > 0) {
+        showToast('warning', validationErrors.join('\n'));
+        return;
+      }
+
+      // Start registration process
       setIsLoading(true);
       console.log('Starting registration with data:', {
         ...formData,
         hasProfilePicture: !!profilePicture
       });
       
-      const response = await authService.register({
-        ...formData,
-        profilePicture: profilePicture || undefined,
-      });
+      try {
+        const response = await authService.register({
+          ...formData,
+          profilePicture: profilePicture || undefined,
+        });
 
-      console.log('Registration successful, navigating to email verification');
-      navigation.navigate('EmailVerification', { 
-        email: formData.email,
-        userId: response.id 
-      });
-    } catch (error: any) {
-      console.error('Registration error:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
+        console.log('Registration successful, navigating to email verification');
+        
+        if (!response?.id) {
+          throw new Error('Invalid user ID received from server');
+        }
 
-      if (error.response?.status === 400) {
-        const errors = error.response.data.errors || {};
-        const errorMessages = Object.entries(errors)
-          .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)
-          .join('\n');
-        setError(errorMessages || 'Please check your input and try again');
-      } else if (error.response?.status === 409) {
-        setError('Username, email, or phone number already exists');
-      } else {
-        setError(error.response?.data?.message || 'Registration failed. Please try again.');
+        showToast('success', 'Registration successful! Please check your email for verification code.');
+        
+        // Navigate after a short delay to allow the success toast to be seen
+        setTimeout(() => {
+          navigation.navigate('VerifyEmail', { 
+            userId: response.id.toLowerCase(),
+            email: formData.email.toLowerCase()
+          });
+        }, 1500);
+
+      } catch (error: any) {
+        console.error('Registration service error:', error);
+
+        // Handle specific error cases
+        if (error.response?.status === 400) {
+          const errorMessage = error.response.data;
+          if (typeof errorMessage === 'string' && errorMessage.includes('Validation failed')) {
+            // Extract validation message without the "Validation failed:" prefix
+            const cleanMessage = errorMessage.replace('Validation failed:', '').trim();
+            showToast('warning', cleanMessage);
+          } else {
+            const errors = error.response.data.errors || {};
+            const errorMessages = Object.entries(errors)
+              .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)
+              .join('\n');
+            showToast('warning', errorMessages || 'Please check your input and try again');
+          }
+        } else if (error.response?.status === 409) {
+          const errorMessage = error.response.data;
+          if (typeof errorMessage === 'string') {
+            if (errorMessage.includes('Email')) {
+              showToast('warning', 'This email is already registered. Please use a different email or try logging in.');
+              setTimeout(() => {
+                setFormData(prev => ({ ...prev, email: '' }));
+              }, 2000);
+            } else if (errorMessage.includes('Username')) {
+              showToast('warning', 'This username is already taken. Please choose a different one.');
+              setTimeout(() => {
+                setFormData(prev => ({ ...prev, username: '' }));
+              }, 2000);
+            } else {
+              showToast('warning', errorMessage);
+            }
+          } else {
+            showToast('warning', 'Username, email, or phone number already exists');
+          }
+        } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          showToast('error', 'Request timed out. Please check your connection and try again.');
+        } else if (!error.response) {
+          showToast('error', 'Network error. Please check your internet connection and try again.');
+        } else if (error.response?.status === 500 || error.response?.status === 503) {
+          showToast('error', 'Server is currently unavailable. Please try again in a few moments.');
+        } else {
+          showToast('error', error.response?.data?.message || 'Registration failed. Please try again.');
+        }
       }
+    } catch (error) {
+      console.error('Unexpected error during registration:', error);
+      showToast('error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -173,12 +242,6 @@ const RegisterScreen = ({ navigation }: Props) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.formContainer}>
           <Text style={styles.title}>Create Account</Text>
-
-          {error && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
 
           <TouchableOpacity 
             style={styles.imagePicker} 
@@ -352,16 +415,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 30,
     textAlign: 'center',
-  },
-  errorContainer: {
-    backgroundColor: '#ffebee',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: '#c62828',
-    fontSize: 14,
   },
   inputGroup: {
     marginBottom: 15,
