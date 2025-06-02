@@ -85,13 +85,28 @@ export const verifyEmail = createAsyncThunk(
       console.log('Verifying email with:', { userId, code });
       
       // Ensure userId is a valid GUID format
-      const formattedUserId = userId.toLowerCase().trim();
+      let formattedUserId: string;
+      try {
+        // Try to parse and format as GUID
+        formattedUserId = userId.toLowerCase().trim();
+        // Validate GUID format
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(formattedUserId)) {
+          throw new Error('Invalid GUID format');
+        }
+      } catch (error) {
+        console.error('Invalid userId format:', error);
+        return rejectWithValue('Invalid user ID format');
+      }
+
+      // Ensure code is a 4-digit string
+      const cleanCode = code.replace(/\D/g, '');
+      if (cleanCode.length !== 4 || !/^\d{4}$/.test(cleanCode)) {
+        return rejectWithValue('Invalid verification code format');
+      }
       
       const response = await apiClient.post('/auth/verify-email', {
-        request: {
-          userId: formattedUserId,
-          code: code.trim()
-        }
+        userId: formattedUserId,
+        code: cleanCode
       });
       
       return response.data;
@@ -107,6 +122,9 @@ export const verifyEmail = createAsyncThunk(
             }
             if (field === 'request') {
               return 'Invalid verification request';
+            }
+            if (field === 'code') {
+              return 'Invalid verification code format';
             }
             return `${field}: ${(messages as string[]).join(', ')}`;
           })

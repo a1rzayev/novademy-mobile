@@ -99,45 +99,183 @@ class AuthService {
         },
       });
 
-      console.log('Registration response:', {
+      // Log the complete response for debugging
+      console.log('Complete registration response:', {
         status: response.status,
-        data: response.data,
-        headers: response.headers
+        statusText: response.statusText,
+        headers: JSON.stringify(response.headers, null, 2),
+        data: JSON.stringify(response.data, null, 2),
+        config: JSON.stringify(response.config, null, 2)
       });
 
       // The backend returns a 201 Created with the user ID in the response body
       if (response.status === 201) {
-        // Extract the user ID from the response
-        const userId = response.data?.id || response.headers?.location?.split('/').pop();
-        if (!userId) {
-          throw new Error('Could not find user ID in response');
+        // Try to get the user ID from different possible locations
+        let userId: string | undefined;
+
+        // 1. Try from response data
+        if (response.data?.id) {
+          userId = response.data.id;
+          console.log('Found userId in response.data.id:', userId);
         }
+        // 2. Try from location header
+        else if (response.headers?.location) {
+          // First try to get it from the query parameter
+          const url = new URL(response.headers.location, 'http://dummy');
+          const idParam = url.searchParams.get('id');
+          if (idParam) {
+            userId = idParam;
+            console.log('Found userId in location query param:', userId);
+          } else {
+            // If not in query param, try to extract GUID from the path
+            const locationMatch = response.headers.location.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+            if (locationMatch) {
+              userId = locationMatch[0];
+              console.log('Extracted userId from location path:', userId);
+            } else {
+              console.log('Location header format:', response.headers.location);
+            }
+          }
+        }
+        // 3. Try from response message
+        else if (typeof response.data === 'string' && response.data.includes('User with ID')) {
+          const match = response.data.match(/User with ID ([^ ]+)/);
+          if (match) {
+            userId = match[1];
+            console.log('Found userId in response message:', userId);
+          }
+        }
+
+        if (!userId) {
+          console.error('Could not find userId in response:', {
+            headers: response.headers,
+            data: response.data
+          });
+          throw new Error('Could not find user ID in registration response');
+        }
+
+        // Clean up the userId
+        userId = userId.trim().toLowerCase();
+
+        // If it's a number, convert to GUID format
+        if (/^\d+$/.test(userId)) {
+          const padded = userId.padStart(32, '0');
+          userId = [
+            padded.slice(0, 8),
+            padded.slice(8, 12),
+            padded.slice(12, 16),
+            padded.slice(16, 20),
+            padded.slice(20, 32)
+          ].join('-');
+          console.log('Converted numeric userId to GUID format:', userId);
+        }
+
+        // Validate the final userId format
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+          console.error('Invalid userId format after processing:', {
+            userId,
+            originalLocation: response.headers?.location,
+            originalData: response.data
+          });
+          throw new Error('Invalid user ID format after processing');
+        }
+
+        console.log('Final processed userId:', userId);
+
         return {
           id: userId,
-          message: response.data?.message || 'Registration successful'
+          message: typeof response.data === 'string' ? response.data : 'Registration successful'
         };
       }
 
-      throw new Error('Unexpected response status: ' + response.status);
+      throw new Error(`Unexpected response status: ${response.status}`);
     } catch (error: any) {
-      console.error('Registration service error:', {
+      // Enhanced error logging
+      console.error('Registration service error details:', {
         message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        headers: error.response?.headers,
-        config: {
+        response: {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          headers: error.response?.headers
+        },
+        request: {
           url: error.config?.url,
           method: error.config?.method,
           headers: error.config?.headers,
           data: error.config?.data
         }
       });
+
+      // Rethrow with a more descriptive message
+      if (error.response?.data) {
+        throw new Error(typeof error.response.data === 'string' 
+          ? error.response.data 
+          : JSON.stringify(error.response.data));
+      }
       throw error;
     }
   }
 
   async verifyEmail(userId: string, code: string): Promise<void> {
-    await apiClient.post('/auth/verify-email', { userId, code });
+    // Ensure userId is a valid GUID
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      console.error('Invalid userId format in verifyEmail:', userId);
+      throw new Error('Invalid user ID format. Expected a valid GUID.');
+    }
+
+    // Ensure code is exactly 4 digits
+    const cleanCode = code.replace(/\D/g, '');
+    if (!/^\d{4}$/.test(cleanCode)) {
+      console.error('Invalid code format in verifyEmail:', code);
+      throw new Error('Invalid verification code format. Expected exactly 4 digits.');
+    }
+
+    try {
+      console.log('Sending verification request:', {
+        userId,
+        code: cleanCode,
+        endpoint: '/auth/verify-email'
+      });
+
+      const response = await apiClient.post('/auth/verify-email', {
+        userId: userId.toLowerCase(),
+        code: cleanCode
+      });
+
+      console.log('Verification response:', response.data);
+    } catch (error: any) {
+      console.error('Verification error details:', {
+        message: error.message,
+        response: {
+          status: error.response?.status,
+          data: error.response?.data,
+          headers: error.response?.headers
+        },
+        request: {
+          userId,
+          code: cleanCode
+        }
+      });
+
+      if (error.response?.data) {
+        // Handle specific error messages from the API
+        const errorMessage = typeof error.response.data === 'string' 
+          ? error.response.data 
+          : error.response.data.message || JSON.stringify(error.response.data);
+
+        if (errorMessage.includes('Invalid verification code')) {
+          throw new Error('The verification code is incorrect. Please check your email and try again.');
+        } else if (errorMessage.includes('expired')) {
+          throw new Error('The verification code has expired. Please request a new one.');
+        } else if (errorMessage.includes('already verified')) {
+          throw new Error('This email is already verified. You can now login.');
+        }
+
+        throw new Error(errorMessage);
+      }
+      throw error;
+    }
   }
 
   async logout(): Promise<void> {
