@@ -1,16 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { Text, Card, Button, useTheme, ActivityIndicator, Searchbar } from 'react-native-paper';
-import packageService from '../../api/services/packageService';
-
-interface Package {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  duration: number;
-  features: string[];
-}
+import packageService, { Package } from '../../api/services/packageService';
 
 const PackageSelectionScreen = () => {
   const [packages, setPackages] = useState<Package[]>([]);
@@ -18,15 +9,23 @@ const PackageSelectionScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const theme = useTheme();
 
   const fetchPackages = async (query?: string) => {
     try {
+      setError(null);
       const fetchedPackages = await packageService.getPackages(query);
+      if (!Array.isArray(fetchedPackages)) {
+        console.error('Invalid packages response:', fetchedPackages);
+        throw new Error('Invalid response format from server');
+      }
       setPackages(fetchedPackages);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching packages:', error);
-      Alert.alert('Error', 'Failed to load packages. Please try again.');
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to load packages';
+      setError(errorMessage);
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -57,9 +56,10 @@ const PackageSelectionScreen = () => {
         'Package purchased successfully!',
         [{ text: 'OK', onPress: () => fetchPackages() }]
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Purchase error:', error);
-      Alert.alert('Error', 'Failed to purchase package. Please try again.');
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to purchase package';
+      Alert.alert('Error', errorMessage);
     } finally {
       setPurchasing(null);
     }
@@ -87,6 +87,15 @@ const PackageSelectionScreen = () => {
         />
       </View>
 
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Button mode="contained" onPress={() => fetchPackages()}>
+            Retry
+          </Button>
+        </View>
+      )}
+
       <ScrollView
         style={styles.content}
         refreshControl={
@@ -104,19 +113,24 @@ const PackageSelectionScreen = () => {
               </Text>
               <View style={styles.packageDetails}>
                 <Text variant="bodyMedium">
-                  Duration: {pkg.duration} months
+                  {pkg.courseCount} Courses
                 </Text>
                 <Text variant="titleMedium" style={styles.price}>
                   ${pkg.price}
                 </Text>
               </View>
-              <View style={styles.featuresContainer}>
-                {pkg.features.map((feature, index) => (
-                  <Text key={index} variant="bodySmall" style={styles.feature}>
-                    • {feature}
+              {pkg.courses && pkg.courses.length > 0 && (
+                <View style={styles.coursesContainer}>
+                  <Text variant="bodySmall" style={styles.coursesTitle}>
+                    Included Courses:
                   </Text>
-                ))}
-              </View>
+                  {pkg.courses.map((course) => (
+                    <Text key={course.id} variant="bodySmall" style={styles.course}>
+                      • {course.title}
+                    </Text>
+                  ))}
+                </View>
+              )}
             </Card.Content>
             <Card.Actions>
               <Button
@@ -132,7 +146,7 @@ const PackageSelectionScreen = () => {
           </Card>
         ))}
 
-        {packages.length === 0 && !loading && (
+        {!error && packages.length === 0 && !loading && (
           <View style={styles.emptyState}>
             <Text variant="bodyLarge" style={styles.emptyStateText}>
               No packages found
@@ -191,10 +205,17 @@ const styles = StyleSheet.create({
   price: {
     fontWeight: 'bold',
   },
-  featuresContainer: {
+  coursesContainer: {
     marginTop: 8,
+    padding: 8,
+    backgroundColor: '#f8f8f8',
+    borderRadius: 4,
   },
-  feature: {
+  coursesTitle: {
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  course: {
     marginBottom: 4,
     opacity: 0.8,
   },
@@ -208,6 +229,18 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     opacity: 0.7,
+  },
+  errorContainer: {
+    padding: 16,
+    backgroundColor: '#ffebee',
+    margin: 16,
+    borderRadius: 4,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#d32f2f',
+    marginBottom: 8,
+    textAlign: 'center',
   },
 });
 

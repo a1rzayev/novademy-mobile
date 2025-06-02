@@ -35,6 +35,23 @@ export interface RegisterResponse {
   message: string;
 }
 
+export interface User {
+  id: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  roleId: number;
+  role: string;
+  group: number;
+  sector: SectorType;
+  profilePictureUrl?: string;
+  isEmailVerified: boolean;
+  registeredAt: string;
+  lastLoginAt: string;
+}
+
 class AuthService {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const formData = new FormData();
@@ -46,8 +63,21 @@ class AuthService {
         'Content-Type': 'multipart/form-data',
       },
     });
+
+    // Store tokens
     await AsyncStorage.setItem('authToken', response.data.accessToken);
     await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+
+    // Extract and store user ID from JWT token
+    try {
+      const tokenPayload = JSON.parse(atob(response.data.accessToken.split('.')[1]));
+      if (tokenPayload.id) {
+        await AsyncStorage.setItem('userId', tokenPayload.id);
+      }
+    } catch (error) {
+      console.error('Error extracting user ID from token:', error);
+    }
+
     return response.data;
   }
 
@@ -279,16 +309,50 @@ class AuthService {
   }
 
   async logout(): Promise<void> {
-    await AsyncStorage.removeItem('authToken');
-    await AsyncStorage.removeItem('refreshToken');
+    try {
+      const userId = await AsyncStorage.getItem('userId');
+      if (!userId) {
+        console.warn('No user ID found in storage');
+        return;
+      }
+      await apiClient.post(`/auth/logout/${userId}`);
+    } finally {
+      // Clear all auth-related data
+      await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userId']);
+    }
   }
 
-  async getCurrentUser(): Promise<AuthResponse['user'] | null> {
+  async refreshToken(refreshToken: string): Promise<AuthResponse> {
+    const response = await apiClient.post<AuthResponse>('/auth/refresh', {
+      refreshToken
+    });
+    await AsyncStorage.setItem('authToken', response.data.accessToken);
+    await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+    return response.data;
+  }
+
+  async getCurrentUser(): Promise<User | null> {
     try {
-      const response = await apiClient.get<AuthResponse['user']>('/auth/me');
+      const response = await apiClient.get<User>('/auth/me');
       return response.data;
-    } catch (error) {
-      return null;
+    } catch (error: any) {
+      console.error('Error fetching current user:', {
+        message: error.message,
+        response: {
+          status: error.response?.status,
+          data: error.response?.data,
+          headers: error.response?.headers
+        }
+      });
+      
+      // If the user is not authenticated (401) or the endpoint is not found (404),
+      // return null to indicate no user is logged in
+      if (error.response?.status === 401 || error.response?.status === 404) {
+        return null;
+      }
+      
+      // For other errors, throw to let the caller handle them
+      throw error;
     }
   }
 }

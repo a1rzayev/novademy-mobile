@@ -21,12 +21,13 @@ export interface Lesson {
   duration: number;
   videoUrl: string;
   order: number;
+  isFree: boolean;
 }
 
 class CourseService {
   async getCourses(searchQuery?: string): Promise<Course[]> {
     const params = searchQuery ? { search: searchQuery } : undefined;
-    const response = await apiClient.get<Course[]>('/courses', { params });
+    const response = await apiClient.get<Course[]>('/course', { params });
     return response.data;
   }
 
@@ -36,17 +37,24 @@ class CourseService {
   }
 
   async getCourseById(courseId: string): Promise<Course> {
-    const response = await apiClient.get<Course>(`/courses/${courseId}`);
+    const response = await apiClient.get<Course>(`/course/${courseId}`);
+    return response.data;
+  }
+
+  async getLessonsByCourseId(courseId: string): Promise<Lesson[]> {
+    const response = await apiClient.get<Lesson[]>(`/lesson/course/${courseId}`);
     return response.data;
   }
 
   async getLessonById(lessonId: string): Promise<Lesson> {
-    const response = await apiClient.get<Lesson>(`/lessons/${lessonId}`);
+    const response = await apiClient.get<Lesson>(`/lesson/${lessonId}`);
     return response.data;
   }
 
+  // Note: Course enrollment is handled through package subscription
+  // This method is kept for future use if direct course enrollment is added
   async enrollInCourse(courseId: string): Promise<void> {
-    await apiClient.post(`/courses/${courseId}/enroll`);
+    await apiClient.post(`/course/${courseId}/enroll`);
   }
 
   async getEnrolledCourses(): Promise<Course[]> {
