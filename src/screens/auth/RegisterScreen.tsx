@@ -12,12 +12,31 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigation';
 import * as ImagePicker from 'expo-image-picker';
-import authService from '../../api/services/authService';
+import authService, { SectorType } from '../../api/services/authService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
+
+const sectorMap: { [key: string]: SectorType } = {
+  'AZ': SectorType.Azerbaijani,
+  'RU': SectorType.Russian,
+  'EN': SectorType.English,
+};
+
+const sectorMapReverse: { [key in SectorType]: string } = {
+  [SectorType.Azerbaijani]: 'AZ',
+  [SectorType.Russian]: 'RU',
+  [SectorType.English]: 'EN',
+};
+
+const validateEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
 
 export const RegisterScreen = ({ navigation }: Props) => {
   const [formData, setFormData] = useState({
@@ -27,12 +46,14 @@ export const RegisterScreen = ({ navigation }: Props) => {
     lastName: '',
     email: '',
     phoneNumber: '',
-    roleId: '2', // Default to student role
-    group: '',
-    sector: '0', // Default sector
+    roleId: 3, // Changed to match web version
+    group: 1, // Default to 1 like web version
+    sector: SectorType.Azerbaijani,
   });
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const pickImage = async () => {
     try {
@@ -58,12 +79,20 @@ export const RegisterScreen = ({ navigation }: Props) => {
   };
 
   const handleRegister = async () => {
+    setError(null);
+    
     // Validate required fields
-    const requiredFields = ['username', 'password', 'firstName', 'lastName', 'email'];
+    const requiredFields = ['username', 'password', 'firstName', 'lastName', 'email', 'phoneNumber'];
     const missingFields = requiredFields.filter(field => !formData[field as keyof typeof formData]);
     
     if (missingFields.length > 0) {
-      Alert.alert('Error', `Please fill in all required fields: ${missingFields.join(', ')}`);
+      setError(`Please fill in all required fields: ${missingFields.join(', ')}`);
+      return;
+    }
+
+    // Validate email format
+    if (!validateEmail(formData.email)) {
+      setError('Please enter a valid email address');
       return;
     }
 
@@ -75,10 +104,34 @@ export const RegisterScreen = ({ navigation }: Props) => {
       });
       navigation.navigate('VerifyEmail', { userId });
     } catch (error: any) {
-      Alert.alert(
-        'Registration Failed',
-        error.response?.data?.message || 'An error occurred during registration'
-      );
+      console.error('Registration error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+
+      if (error.response?.status === 400) {
+        // Handle validation errors
+        const errors = error.response.data.errors;
+        let errorMessage = 'Please fix the following errors:\n\n';
+        
+        if (errors?.Email) {
+          errorMessage += `Email: ${errors.Email.join(', ')}\n`;
+        }
+        if (errors?.Username) {
+          errorMessage += `Username: ${errors.Username.join(', ')}\n`;
+        }
+        if (errors?.Password) {
+          errorMessage += `Password: ${errors.Password.join(', ')}\n`;
+        }
+        if (errors?.PhoneNumber) {
+          errorMessage += `Phone Number: ${errors.PhoneNumber.join(', ')}\n`;
+        }
+        
+        setError(errorMessage);
+      } else {
+        setError(error.response?.data?.message || 'An error occurred during registration');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -92,6 +145,12 @@ export const RegisterScreen = ({ navigation }: Props) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.formContainer}>
           <Text style={styles.title}>Create Account</Text>
+
+          {error && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
 
           <TouchableOpacity 
             style={styles.imagePicker} 
@@ -107,67 +166,112 @@ export const RegisterScreen = ({ navigation }: Props) => {
             )}
           </TouchableOpacity>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Username *"
-            value={formData.username}
-            onChangeText={(text) => setFormData({ ...formData, username: text })}
-            autoCapitalize="none"
-            editable={!isLoading}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Username *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.username}
+              onChangeText={(text) => setFormData({ ...formData, username: text })}
+              autoCapitalize="none"
+              editable={!isLoading}
+            />
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password *"
-            value={formData.password}
-            onChangeText={(text) => setFormData({ ...formData, password: text })}
-            secureTextEntry
-            editable={!isLoading}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password *</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                value={formData.password}
+                onChangeText={(text) => setFormData({ ...formData, password: text })}
+                secureTextEntry={!showPassword}
+                editable={!isLoading}
+              />
+              <TouchableOpacity
+                style={styles.passwordToggle}
+                onPress={() => setShowPassword(!showPassword)}
+                disabled={isLoading}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={24}
+                  color="#666"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="First Name *"
-            value={formData.firstName}
-            onChangeText={(text) => setFormData({ ...formData, firstName: text })}
-            editable={!isLoading}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>First Name *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.firstName}
+              onChangeText={(text) => setFormData({ ...formData, firstName: text })}
+              editable={!isLoading}
+            />
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Last Name *"
-            value={formData.lastName}
-            onChangeText={(text) => setFormData({ ...formData, lastName: text })}
-            editable={!isLoading}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Last Name *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.lastName}
+              onChangeText={(text) => setFormData({ ...formData, lastName: text })}
+              editable={!isLoading}
+            />
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Email *"
-            value={formData.email}
-            onChangeText={(text) => setFormData({ ...formData, email: text })}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            editable={!isLoading}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.email}
+              onChangeText={(text) => setFormData({ ...formData, email: text })}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!isLoading}
+            />
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Phone Number"
-            value={formData.phoneNumber}
-            onChangeText={(text) => setFormData({ ...formData, phoneNumber: text })}
-            keyboardType="phone-pad"
-            editable={!isLoading}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Phone Number *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.phoneNumber}
+              onChangeText={(text) => setFormData({ ...formData, phoneNumber: text })}
+              keyboardType="phone-pad"
+              editable={!isLoading}
+            />
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Group"
-            value={formData.group}
-            onChangeText={(text) => setFormData({ ...formData, group: text })}
-            keyboardType="number-pad"
-            editable={!isLoading}
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Group *</Text>
+            <Picker
+              selectedValue={formData.group}
+              onValueChange={(value) => setFormData({ ...formData, group: value })}
+              enabled={!isLoading}
+              style={styles.picker}
+            >
+              <Picker.Item label="1" value={1} />
+              <Picker.Item label="2" value={2} />
+              <Picker.Item label="3" value={3} />
+              <Picker.Item label="4" value={4} />
+            </Picker>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Sector *</Text>
+            <Picker
+              selectedValue={sectorMapReverse[formData.sector]}
+              onValueChange={(value) => setFormData({ ...formData, sector: sectorMap[value] })}
+              enabled={!isLoading}
+              style={styles.picker}
+            >
+              <Picker.Item label="AZ" value="AZ" />
+              <Picker.Item label="RU" value="RU" />
+              <Picker.Item label="EN" value="EN" />
+            </Picker>
+          </View>
 
           <TouchableOpacity 
             style={[styles.button, isLoading && styles.buttonDisabled]} 
@@ -213,6 +317,32 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     textAlign: 'center',
   },
+  errorContainer: {
+    backgroundColor: '#ffebee',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 20,
+  },
+  errorText: {
+    color: '#c62828',
+    fontSize: 14,
+  },
+  inputGroup: {
+    marginBottom: 15,
+  },
+  label: {
+    fontSize: 16,
+    marginBottom: 5,
+    color: '#333',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    padding: 15,
+    borderRadius: 10,
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
   imagePicker: {
     alignSelf: 'center',
     marginBottom: 20,
@@ -234,13 +364,11 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
   },
-  input: {
+  picker: {
     borderWidth: 1,
     borderColor: '#ddd',
-    padding: 15,
     borderRadius: 10,
-    marginBottom: 15,
-    fontSize: 16,
+    backgroundColor: '#fff',
   },
   button: {
     backgroundColor: '#007AFF',
@@ -264,6 +392,24 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#007AFF',
     fontSize: 14,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    backgroundColor: '#fff',
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 0,
+    marginBottom: 0,
+  },
+  passwordToggle: {
+    padding: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

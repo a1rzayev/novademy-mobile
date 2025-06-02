@@ -6,6 +6,12 @@ export interface LoginCredentials {
   password: string;
 }
 
+export enum SectorType {
+  Azerbaijani = 0,
+  Russian = 1,
+  English = 2
+}
+
 export interface RegisterData {
   username: string;
   password: string;
@@ -13,9 +19,9 @@ export interface RegisterData {
   lastName: string;
   email: string;
   phoneNumber: string;
-  roleId: string;
-  group: string;
-  sector: string;
+  roleId: number;
+  group?: number;
+  sector: SectorType;
   profilePicture?: string;
 }
 
@@ -49,16 +55,22 @@ class AuthService {
   async register(data: RegisterData): Promise<{ userId: string }> {
     const formData = new FormData();
     
-    // Append all text fields
-    Object.entries(data).forEach(([key, value]) => {
-      if (key !== 'profilePicture') {
-        formData.append(key, value);
-      }
-    });
+    // Append all text fields with proper casing to match API model
+    formData.append('Username', data.username);
+    formData.append('Password', data.password);
+    formData.append('FirstName', data.firstName);
+    formData.append('LastName', data.lastName);
+    formData.append('Email', data.email);
+    formData.append('PhoneNumber', data.phoneNumber);
+    formData.append('RoleId', data.roleId.toString());
+    if (data.group !== undefined) {
+      formData.append('Group', data.group.toString());
+    }
+    formData.append('Sector', data.sector.toString());
 
     // Append profile picture if exists
     if (data.profilePicture) {
-      formData.append('profilePicture', {
+      formData.append('ProfilePicture', {
         uri: data.profilePicture,
         type: 'image/jpeg',
         name: 'profile.jpg',

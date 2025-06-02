@@ -6,13 +6,18 @@ import { Platform } from 'react-native';
 const apiClient = axios.create({
   baseURL: Platform.OS === 'android' 
     ? 'http://10.0.2.2:5258/api/v1'  // Android emulator
-    : 'http://localhost:5258/api/v1', // iOS simulator
+    : 'http://localhost:5258/api/v1', // iOS simulator and web
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
   timeout: 10000, // 10 seconds timeout
 });
+
+// Add development environment check
+if (__DEV__) {
+  console.log('API Client initialized with baseURL:', apiClient.defaults.baseURL);
+}
 
 // Request interceptor for adding auth token
 apiClient.interceptors.request.use(
