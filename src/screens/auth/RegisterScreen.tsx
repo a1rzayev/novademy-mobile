@@ -18,6 +18,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigation';
 import * as ImagePicker from 'expo-image-picker';
 import authService, { SectorType } from '../../api/services/authService';
+import Toast from 'react-native-toast-message';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
@@ -38,7 +39,7 @@ const validateEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
-export const RegisterScreen = ({ navigation }: Props) => {
+const RegisterScreen = ({ navigation }: Props) => {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -46,14 +47,25 @@ export const RegisterScreen = ({ navigation }: Props) => {
     lastName: '',
     email: '',
     phoneNumber: '',
-    roleId: 3, // Changed to match web version
-    group: 1, // Default to 1 like web version
+    roleId: 3, // Student role
+    group: 1,
     sector: SectorType.Azerbaijani,
   });
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  const showToast = (type: 'success' | 'error' | 'warning', message: string) => {
+    Toast.show({
+      type,
+      text1: type === 'success' ? 'Success' : type === 'warning' ? 'Warning' : 'Error',
+      text2: message,
+      position: 'top',
+      visibilityTime: 4000,
+      autoHide: true,
+      topOffset: Platform.OS === 'ios' ? 50 : 30,
+    });
+  };
 
   const pickImage = async () => {
     try {
@@ -78,72 +90,145 @@ export const RegisterScreen = ({ navigation }: Props) => {
     }
   };
 
-  const handleRegister = async () => {
-    setError(null);
-    
-    // Validate required fields
-    const requiredFields = ['username', 'password', 'firstName', 'lastName', 'email', 'phoneNumber'];
-    const missingFields = requiredFields.filter(field => !formData[field as keyof typeof formData]);
-    
-    if (missingFields.length > 0) {
-      setError(`Please fill in all required fields: ${missingFields.join(', ')}`);
-      return;
-    }
+  const validatePassword = (password: string): boolean => {
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasDigit = /\d/.test(password);
+    return hasUpperCase && hasLowerCase && hasDigit;
+  };
 
-    // Validate email format
-    if (!validateEmail(formData.email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
+  const validateForm = () => {
+    const errors: string[] = [];
 
     try {
-      setIsLoading(true);
-      console.log('Starting registration process...');
-      
-      const response = await authService.register({
-        ...formData,
-        profilePicture: profilePicture || undefined,
-      });
-
-      console.log('Registration successful, response received');
-      
-      // If we get here, registration was successful and tokens are stored
-      // The RootNavigator will handle the navigation based on auth state
-    } catch (error: any) {
-      console.error('Registration screen error:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        isAxiosError: error.isAxiosError,
-        code: error.code
-      });
-
-      if (error.response?.status === 400) {
-        // Handle validation errors
-        const errors = error.response.data.errors;
-        let errorMessage = 'Please fix the following errors:\n\n';
-        
-        if (errors?.Email) {
-          errorMessage += `Email: ${errors.Email.join(', ')}\n`;
-        }
-        if (errors?.Username) {
-          errorMessage += `Username: ${errors.Username.join(', ')}\n`;
-        }
-        if (errors?.Password) {
-          errorMessage += `Password: ${errors.Password.join(', ')}\n`;
-        }
-        if (errors?.PhoneNumber) {
-          errorMessage += `Phone Number: ${errors.PhoneNumber.join(', ')}\n`;
-        }
-        
-        setError(errorMessage);
-      } else if (error.message === 'Invalid response from server: Missing tokens') {
-        setError('Registration was successful but server response was invalid. Please try logging in.');
-      } else if (error.code === 'ECONNABORTED') {
-        setError('Request timed out. Please check your internet connection and try again.');
-      } else {
-        setError(error.response?.data?.message || 'An error occurred during registration. Please try again.');
+      if (!formData.username.trim()) {
+        errors.push('Username is required');
+      } else if (formData.username.length < 3) {
+        errors.push('Username must be at least 3 characters long');
       }
+
+      if (!formData.password) {
+        errors.push('Password is required');
+      } else if (formData.password.length < 6) {
+        errors.push('Password must be at least 6 characters long');
+      } else if (!validatePassword(formData.password)) {
+        errors.push('Password must contain at least one uppercase letter, one lowercase letter, and one digit');
+      }
+
+      if (!formData.firstName.trim()) {
+        errors.push('First name is required');
+      }
+
+      if (!formData.lastName.trim()) {
+        errors.push('Last name is required');
+      }
+
+      if (!formData.email.trim()) {
+        errors.push('Email is required');
+      } else if (!validateEmail(formData.email)) {
+        errors.push('Please enter a valid email address');
+      }
+
+      if (!formData.phoneNumber.trim()) {
+        errors.push('Phone number is required');
+      } else if (!/^0?\d{9}$/.test(formData.phoneNumber.replace(/\s+/g, ''))) {
+        errors.push('Phone number must be exactly 9 digits, optionally starting with 0');
+      }
+
+      return errors;
+    } catch (error) {
+      console.error('Form validation error:', error);
+      return ['An error occurred while validating the form'];
+    }
+  };
+
+  const handleRegister = async () => {
+    try {
+      // Validate form
+      const validationErrors = validateForm();
+      if (validationErrors.length > 0) {
+        showToast('warning', validationErrors.join('\n'));
+        return;
+      }
+
+      // Start registration process
+      setIsLoading(true);
+      console.log('Starting registration with data:', {
+        ...formData,
+        hasProfilePicture: !!profilePicture
+      });
+      
+      try {
+        const response = await authService.register({
+          ...formData,
+          profilePicture: profilePicture || undefined,
+        });
+
+        console.log('Registration successful, navigating to email verification');
+        
+        if (!response?.id) {
+          throw new Error('Invalid user ID received from server');
+        }
+
+        showToast('success', 'Registration successful! Please check your email for verification code.');
+        
+        // Navigate after a short delay to allow the success toast to be seen
+        setTimeout(() => {
+          navigation.navigate('EmailVerification', { 
+            email: formData.email.toLowerCase(),
+            userId: response.id.toLowerCase()
+          });
+        }, 1500);
+
+      } catch (error: any) {
+        console.error('Registration service error:', error);
+
+        // Handle specific error cases
+        if (error.response?.status === 400) {
+          const errorMessage = error.response.data;
+          if (typeof errorMessage === 'string' && errorMessage.includes('Validation failed')) {
+            // Extract validation message without the "Validation failed:" prefix
+            const cleanMessage = errorMessage.replace('Validation failed:', '').trim();
+            showToast('warning', cleanMessage);
+          } else {
+            const errors = error.response.data.errors || {};
+            const errorMessages = Object.entries(errors)
+              .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)
+              .join('\n');
+            showToast('warning', errorMessages || 'Please check your input and try again');
+          }
+        } else if (error.response?.status === 409) {
+          const errorMessage = error.response.data;
+          if (typeof errorMessage === 'string') {
+            if (errorMessage.includes('Email')) {
+              showToast('warning', 'This email is already registered. Please use a different email or try logging in.');
+              setTimeout(() => {
+                setFormData(prev => ({ ...prev, email: '' }));
+              }, 2000);
+            } else if (errorMessage.includes('Username')) {
+              showToast('warning', 'This username is already taken. Please choose a different one.');
+              setTimeout(() => {
+                setFormData(prev => ({ ...prev, username: '' }));
+              }, 2000);
+            } else {
+              showToast('warning', errorMessage);
+            }
+          } else {
+            showToast('warning', 'Username, email, or phone number already exists');
+          }
+        } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          showToast('error', 'Request timed out. Please check your connection and try again.');
+        } else if (!error.response) {
+          showToast('error', 'Network error. Please check your internet connection and try again.');
+        } else if (error.response?.status === 500 || error.response?.status === 503) {
+          showToast('error', 'Server is currently unavailable. Please try again in a few moments.');
+        } else {
+          showToast('error', error.response?.data?.message || 'Registration failed. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Unexpected error during registration:', error);
+      showToast('error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -157,12 +242,6 @@ export const RegisterScreen = ({ navigation }: Props) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.formContainer}>
           <Text style={styles.title}>Create Account</Text>
-
-          {error && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
 
           <TouchableOpacity 
             style={styles.imagePicker} 
@@ -250,8 +329,16 @@ export const RegisterScreen = ({ navigation }: Props) => {
             <TextInput
               style={styles.input}
               value={formData.phoneNumber}
-              onChangeText={(text) => setFormData({ ...formData, phoneNumber: text })}
+              onChangeText={(text) => {
+                // Only allow digits and optionally a leading 0
+                const cleaned = text.replace(/[^\d]/g, '');
+                if (cleaned.length <= 10 && (cleaned.length === 0 || cleaned[0] === '0' || cleaned.length <= 9)) {
+                  setFormData({ ...formData, phoneNumber: cleaned });
+                }
+              }}
               keyboardType="phone-pad"
+              maxLength={10}
+              placeholder="Enter 9 digits (e.g., 0123456789)"
               editable={!isLoading}
             />
           </View>
@@ -328,16 +415,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 30,
     textAlign: 'center',
-  },
-  errorContainer: {
-    backgroundColor: '#ffebee',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: '#c62828',
-    fontSize: 14,
   },
   inputGroup: {
     marginBottom: 15,

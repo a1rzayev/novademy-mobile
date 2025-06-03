@@ -1,188 +1,150 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../types/navigation';
-import authService from '../../api/services/authService';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { TextInput, Button, Text, useTheme } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAppDispatch, useAppSelector } from '../../store';
+import { login } from '../../store/slices/authSlice';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { AuthStackParamList } from '../../navigation/AppNavigator';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
-export const LoginScreen = ({ navigation }: Props) => {
-  const [username, setUsername] = useState('');
+const LoginScreen = ({ navigation }: Props) => {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const dispatch = useAppDispatch();
+  const { loading, error } = useAppSelector((state) => state.auth);
+  const theme = useTheme();
 
   const handleLogin = async () => {
-    if (!username || !password) {
+    if (!email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
     try {
-      setIsLoading(true);
-      console.log('Attempting login with:', { username });
-      const response = await authService.login({ username, password });
-      console.log('Login successful:', response);
-      // The RootNavigator will handle the navigation based on auth state
+      const result = await dispatch(login({ email, password })).unwrap();
+      console.log('Login successful:', result);
     } catch (error: any) {
-      console.error('Login error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          headers: error.config?.headers,
-        }
-      });
-
-      if (!error.response) {
-        Alert.alert(
-          'Connection Error',
-          'Could not connect to the server. Please check your internet connection and try again.'
-        );
-      } else if (error.response.status === 404) {
-        // Handle user not found
-        Alert.alert(
-          'Login Failed',
-          'Invalid username or password. Please check your credentials and try again.'
-        );
-      } else if (error.response.status === 400) {
-        // Handle validation errors
-        const errors = error.response.data.errors;
-        let errorMessage = 'Please fix the following errors:\n\n';
-        
-        if (errors?.Username) {
-          errorMessage += `Username: ${errors.Username.join(', ')}\n`;
-        }
-        if (errors?.Password) {
-          errorMessage += `Password: ${errors.Password.join(', ')}\n`;
-        }
-        
-        Alert.alert('Validation Error', errorMessage);
-      } else {
-        Alert.alert(
-          'Login Failed',
-          error.response?.data || error.message || 'An error occurred during login'
-        );
-      }
-    } finally {
-      setIsLoading(false);
+      console.error('Login failed:', error);
+      // Error is already handled by the auth slice
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.formContainer}>
-          <Text style={styles.title}>Welcome Back</Text>
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <View style={styles.content}>
+          <Text variant="headlineMedium" style={styles.title}>
+            Welcome Back
+          </Text>
           
           <TextInput
-            style={styles.input}
-            placeholder="Username"
-            value={username}
-            onChangeText={setUsername}
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
             autoCapitalize="none"
-            editable={!isLoading}
+            keyboardType="email-address"
+            style={styles.input}
+            disabled={loading}
+            error={!!error}
           />
           
           <TextInput
-            style={styles.input}
-            placeholder="Password"
+            label="Password"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            editable={!isLoading}
+            style={styles.input}
+            disabled={loading}
+            error={!!error}
           />
-          
-          <TouchableOpacity 
-            style={[styles.button, isLoading && styles.buttonDisabled]} 
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Login</Text>
-            )}
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={() => navigation.navigate('Register')}
-            disabled={isLoading}
-          >
-            <Text style={styles.linkText}>
-              Don't have an account? Register here
+
+          {error && (
+            <Text style={[styles.error, { color: theme.colors.error }]}>
+              {error}
             </Text>
-          </TouchableOpacity>
+          )}
+
+          <Button
+            mode="contained"
+            onPress={handleLogin}
+            loading={loading}
+            disabled={loading}
+            style={styles.loginButton}
+          >
+            Login
+          </Button>
+
+          <View style={styles.registerContainer}>
+            <Text variant="bodyMedium" style={styles.registerText}>
+              Don't have an account?
+            </Text>
+            <Button
+              mode="text"
+              onPress={() => navigation.navigate('Register')}
+              disabled={loading}
+              style={styles.registerButton}
+              labelStyle={styles.registerButtonLabel}
+            >
+              Create Account
+            </Button>
+          </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
   },
-  scrollContent: {
-    flexGrow: 1,
+  content: {
+    flex: 1,
+    padding: 20,
+    paddingTop: Platform.OS === 'ios' ? 0 : 20,
     justifyContent: 'center',
   },
-  formContainer: {
-    padding: 20,
-  },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 30,
     textAlign: 'center',
+    marginBottom: 30,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-    fontSize: 16,
+    marginBottom: 16,
   },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 15,
-    borderRadius: 10,
+  loginButton: {
+    marginTop: 8,
+  },
+  registerContainer: {
+    marginTop: 24,
     alignItems: 'center',
-    marginTop: 10,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
   },
-  buttonDisabled: {
+  registerText: {
+    marginBottom: 8,
     opacity: 0.7,
   },
-  buttonText: {
-    color: '#fff',
+  registerButton: {
+    marginTop: 4,
+  },
+  registerButtonLabel: {
     fontSize: 16,
     fontWeight: 'bold',
   },
-  linkButton: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: '#007AFF',
-    fontSize: 14,
+  error: {
+    textAlign: 'center',
+    marginBottom: 16,
   },
 });
 

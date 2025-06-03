@@ -18,7 +18,7 @@ export interface Package {
 class PackageService {
   async getPackages(searchQuery?: string): Promise<Package[]> {
     const params = searchQuery ? { search: searchQuery } : undefined;
-    const response = await apiClient.get<Package[]>('/packages', { params });
+    const response = await apiClient.get<Package[]>('/package', { params });
     return response.data;
   }
 
@@ -28,23 +28,26 @@ class PackageService {
   }
 
   async getPackageById(packageId: string): Promise<Package> {
-    const response = await apiClient.get<Package>(`/packages/${packageId}`);
+    const response = await apiClient.get<Package>(`/package/${packageId}`);
     return response.data;
   }
 
   async purchasePackage(packageId: string): Promise<{ subscriptionId: string }> {
-    const response = await apiClient.post<{ subscriptionId: string }>(`/packages/${packageId}/purchase`);
+    const response = await apiClient.post<{ subscriptionId: string }>('/subscription', {
+      packageId,
+      duration: 12 // Annual subscription
+    });
     return response.data;
   }
 
-  async getActiveSubscriptions(): Promise<{
+  async getActiveSubscriptions(userId: string): Promise<{
     id: string;
     packageId: string;
     packageTitle: string;
     expiryDate: string;
     status: 'active' | 'expired' | 'cancelled';
   }[]> {
-    const response = await apiClient.get('/subscriptions/active');
+    const response = await apiClient.get(`/subscription/active/${userId}`);
     return response.data;
   }
 }
