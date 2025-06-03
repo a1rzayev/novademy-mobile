@@ -55,8 +55,8 @@ export interface User {
 class AuthService {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const formData = new FormData();
-    formData.append('username', credentials.username);
-    formData.append('password', credentials.password);
+    formData.append('Username', credentials.username);
+    formData.append('Password', credentials.password);
 
     const response = await apiClient.post<AuthResponse>('/auth/login', formData, {
       headers: {
@@ -71,8 +71,14 @@ class AuthService {
     // Extract and store user ID from JWT token
     try {
       const tokenPayload = JSON.parse(atob(response.data.accessToken.split('.')[1]));
+      // Log token expiration for debugging
+      const expDate = tokenPayload.exp ? new Date(tokenPayload.exp * 1000) : null;
+      console.log('Token expiration:', expDate?.toISOString() || 'not set');
+      
       if (tokenPayload.id) {
         await AsyncStorage.setItem('userId', tokenPayload.id);
+      } else {
+        console.warn('No user ID found in token payload');
       }
     } catch (error) {
       console.error('Error extracting user ID from token:', error);

@@ -35,15 +35,20 @@ apiClient.interceptors.request.use(
       // Log the decoded token payload for debugging
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
+        // Convert Unix timestamps (seconds) to milliseconds for Date objects
+        const expDate = payload.exp ? new Date(payload.exp * 1000) : null;
+        const iatDate = payload.iat ? new Date(payload.iat * 1000) : null;
+        const nbfDate = payload.nbf ? new Date(payload.nbf * 1000) : null;
+        
         console.log('Token payload:', {
           id: payload.id,
           sub: payload.sub,
           role: payload.role,
-          exp: new Date(payload.exp * 1000).toISOString(),
-          iat: new Date(payload.iat * 1000).toISOString(),
+          exp: expDate?.toISOString() || 'not set',
+          iat: iatDate?.toISOString() || 'not set',
           iss: payload.iss,
           aud: payload.aud,
-          nbf: new Date(payload.nbf * 1000).toISOString()
+          nbf: nbfDate?.toISOString() || 'not set'
         });
         
         // Log the full Authorization header
