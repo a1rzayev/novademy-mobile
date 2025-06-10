@@ -7,37 +7,85 @@ import {
   Alert,
   TouchableOpacity,
 } from 'react-native';
-import { Text, Card, Button, useTheme, Divider } from 'react-native-paper';
+import { Text, Card, Button, useTheme, Divider, Chip } from 'react-native-paper';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { MainStackParamList } from '../navigation/AppNavigator';
+import { RootStackParamList } from '../navigation/AppNavigator';
 import packageService, { Package } from '../api/services/packageService';
 import { useAppSelector } from '../store';
 import Chatbot from '../components/Chatbot';
 import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-type Props = NativeStackScreenProps<MainStackParamList, 'PackageDetails'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'PackageDetails'>;
 
-const PackageDetailsScreen = ({ route, navigation }: Props) => {
-  const { packageId } = route.params;
+const PackageDetailsScreen: React.FC<Props> = ({ route, navigation }) => {
+  const packageId = route?.params?.packageId;
   const [packageData, setPackageData] = useState<Package | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPurchased, setIsPurchased] = useState(false);
   const theme = useTheme();
   const user = useAppSelector((state) => state.auth.user);
 
   useEffect(() => {
+    if (!packageId) {
+      setError('Package ID is missing');
+      setLoading(false);
+      return;
+    }
     fetchPackageDetails();
   }, [packageId]);
 
   const fetchPackageDetails = async () => {
+    if (!packageId) return;
+    
     try {
       setError(null);
-      const data = await packageService.getPackageById(packageId);
-      setPackageData(data);
+      console.log('Fetching package details for ID:', packageId);
+      
+      const [data, purchased] = await Promise.all([
+        packageService.getPackageById(packageId),
+        packageService.isPackagePurchased(packageId)
+      ]);
+
+      console.log('Package data received:', {
+        id: data.id,
+        title: data.title,
+        courseCount: data.courses?.length || 0,
+        isPurchased: purchased
+      });
+
+      if (!data || !data.id) {
+        throw new Error('Invalid package data received');
+      }
+
+      // Ensure courses array exists
+      const packageData = {
+        ...data,
+        courses: data.courses || [],
+        courseCount: data.courses?.length || 0
+      };
+
+      setPackageData(packageData);
+      setIsPurchased(purchased);
     } catch (error: any) {
-      console.error('Error fetching package details:', error);
-      setError(error.response?.data?.message || error.message || 'Failed to load package details');
+      console.error('Error in fetchPackageDetails:', {
+        message: error.message,
+        packageId,
+        error
+      });
+      
+      let errorMessage = 'Failed to load package details';
+      if (error.response?.status === 404) {
+        errorMessage = 'Package not found';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -47,13 +95,16 @@ const PackageDetailsScreen = ({ route, navigation }: Props) => {
     if (!user) {
       Alert.alert(
         'Authentication Required',
-        'Please log in to purchase this package.',
+        'Please log in to purchase packages.',
         [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Log In',
-            onPress: () => navigation.navigate('Auth', { screen: 'Login' })
-          }
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Login',
+            onPress: () => navigation.navigate('Auth', { screen: 'Login' }),
+          },
         ]
       );
       return;
@@ -63,52 +114,62 @@ const PackageDetailsScreen = ({ route, navigation }: Props) => {
       'Confirm Purchase',
       `Are you sure you want to purchase "${packageData?.title}" for $${packageData?.price}?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
         {
           text: 'Purchase',
           onPress: async () => {
-            setPurchasing(true);
             try {
-              const result = await packageService.purchasePackage(packageId);
+              setPurchasing(true);
+              await packageService.purchasePackage(packageId);
               Alert.alert(
                 'Success',
-                'Package purchased successfully! You can now access all included courses.',
+                'Package purchased successfully!',
                 [
                   {
-                    text: 'View Courses',
+                    text: 'OK',
                     onPress: () => {
-                      if (packageData?.courses && packageData.courses.length > 0) {
-                        // Navigate to the first course
-                        navigation.navigate('LessonDetails', {
-                          lessonId: packageData.courses[0].id
-                        });
-                      }
-                    }
+                      navigation.navigate('MainTabs');
+                      navigation.navigate('Packages');
+                    },
                   },
-                  { text: 'Stay Here', style: 'cancel' }
                 ]
               );
             } catch (error: any) {
               console.error('Purchase error:', error);
-              let errorMessage = 'Failed to purchase package. ';
-              
-              if (error.message.includes('Validation failed')) {
-                errorMessage += error.message;
-              } else if (error.response?.data?.message) {
-                errorMessage += error.response.data.message;
-              } else if (error.message) {
-                errorMessage += error.message;
-              }
-              
-              Alert.alert('Purchase Failed', errorMessage);
+              Alert.alert(
+                'Purchase Failed',
+                error.message || 'Failed to purchase package. Please try again.'
+              );
             } finally {
               setPurchasing(false);
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
+
+  const handleOpenPackage = () => {
+    if (packageData?.courses && packageData.courses.length > 0) {
+      navigation.navigate('LessonDetails', {
+        lessonId: packageData.courses[0].id
+      });
+    }
+  };
+
+  if (!packageId) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Invalid package ID</Text>
+        <Button mode="contained" onPress={() => navigation.goBack()}>
+          Go Back
+        </Button>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -135,18 +196,29 @@ const PackageDetailsScreen = ({ route, navigation }: Props) => {
     <ScrollView style={styles.container}>
       <Card style={styles.card}>
         <Card.Content>
-          <Text variant="headlineMedium" style={styles.title}>
-            {packageData.title}
-          </Text>
+          <View style={styles.titleContainer}>
+            <Text variant="headlineMedium" style={styles.title}>
+              {packageData?.title || 'Loading...'}
+            </Text>
+            {isPurchased && (
+              <Chip
+                icon="check-circle"
+                style={styles.purchasedChip}
+                textStyle={styles.purchasedChipText}
+              >
+                Purchased
+              </Chip>
+            )}
+          </View>
           <Text variant="bodyLarge" style={styles.description}>
-            {packageData.description}
+            {packageData?.description || 'No description available'}
           </Text>
           <View style={styles.priceContainer}>
             <Text variant="headlineSmall" style={styles.price}>
-              ${packageData.price}
+              ${packageData?.price || 0}
             </Text>
             <Text variant="bodyMedium" style={styles.courseCount}>
-              {packageData.courseCount} Courses
+              {packageData?.courses?.length || 0} Courses
             </Text>
           </View>
         </Card.Content>
@@ -157,27 +229,44 @@ const PackageDetailsScreen = ({ route, navigation }: Props) => {
           <Text variant="titleLarge" style={styles.sectionTitle}>
             Included Courses
           </Text>
-          {packageData.courses.map((course) => (
-            <View key={course.id} style={styles.courseItem}>
-              <Text variant="titleMedium">{course.title}</Text>
-              <Text variant="bodyMedium" style={styles.courseDescription}>
-                {course.description}
-              </Text>
-            </View>
-          ))}
+          {packageData?.courses && packageData.courses.length > 0 ? (
+            packageData.courses.map((course) => (
+              <View key={course.id} style={styles.courseItem}>
+                <Text variant="titleMedium">{course.title}</Text>
+                <Text variant="bodyMedium" style={styles.courseDescription}>
+                  {course.description}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text variant="bodyMedium" style={styles.noCoursesText}>
+              No courses available in this package
+            </Text>
+          )}
         </Card.Content>
       </Card>
 
-      <View style={styles.purchaseContainer}>
-        <Button
-          mode="contained"
-          onPress={handlePurchase}
-          loading={purchasing}
-          disabled={purchasing}
-          style={styles.purchaseButton}
-        >
-          {purchasing ? 'Processing...' : 'Purchase Package'}
-        </Button>
+      <View style={styles.actionContainer}>
+        {isPurchased ? (
+          <Button
+            mode="contained"
+            onPress={handleOpenPackage}
+            icon="play-circle"
+            style={styles.openButton}
+          >
+            Open Package
+          </Button>
+        ) : (
+          <Button
+            mode="contained"
+            onPress={handlePurchase}
+            loading={purchasing}
+            disabled={purchasing}
+            style={styles.purchaseButton}
+          >
+            {purchasing ? 'Processing...' : 'Purchase Package'}
+          </Button>
+        )}
       </View>
 
       <Card style={styles.chatbotCard}>
@@ -220,8 +309,21 @@ const styles = StyleSheet.create({
     margin: 16,
     marginBottom: 8,
   },
-  title: {
+  titleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
+  },
+  title: {
+    flex: 1,
+    marginRight: 8,
+  },
+  purchasedChip: {
+    backgroundColor: '#E8F5E9',
+  },
+  purchasedChipText: {
+    color: '#2E7D32',
   },
   description: {
     marginBottom: 16,
@@ -252,7 +354,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     opacity: 0.8,
   },
-  purchaseContainer: {
+  actionContainer: {
     padding: 16,
     backgroundColor: '#fff',
     borderTopWidth: 1,
@@ -262,9 +364,17 @@ const styles = StyleSheet.create({
   purchaseButton: {
     paddingVertical: 8,
   },
+  openButton: {
+    paddingVertical: 8,
+    backgroundColor: '#4CAF50',
+  },
   chatbotCard: {
     margin: 16,
     marginTop: 8,
+  },
+  noCoursesText: {
+    color: '#808080',
+    textAlign: 'center',
   },
 });
 

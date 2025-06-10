@@ -21,6 +21,7 @@ import PackageDetailsScreen from '../screens/PackageDetailsScreen';
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
+  PackageDetails: { packageId: string };
 };
 
 export type AuthStackParamList = {
@@ -108,11 +109,6 @@ const MainNavigator = () => (
       component={LessonDetailsScreen}
       options={{ title: 'Lesson Details' }}
     />
-    <MainStack.Screen
-      name="PackageDetails"
-      component={PackageDetailsScreen}
-      options={{ title: 'Package Details' }}
-    />
   </MainStack.Navigator>
 );
 
@@ -124,7 +120,18 @@ const AppNavigator = () => {
       {!isAuthenticated ? (
         <Stack.Screen name="Auth" component={AuthNavigator} />
       ) : (
-        <Stack.Screen name="Main" component={MainNavigator} />
+        <>
+          <Stack.Screen name="Main" component={MainNavigator} />
+          <Stack.Screen
+            name="PackageDetails"
+            component={PackageDetailsScreen}
+            options={{ 
+              headerShown: true,
+              title: 'Package Details',
+              presentation: 'modal'
+            }}
+          />
+        </>
       )}
     </Stack.Navigator>
   );
