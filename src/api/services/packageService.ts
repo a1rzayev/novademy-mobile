@@ -1,4 +1,5 @@
 import apiClient from '../client';
+import { getUserId } from '../../utils/auth';
 
 export interface Package {
   id: string;
@@ -13,6 +14,14 @@ export interface Package {
     description: string;
     image: string;
   }[];
+}
+
+interface PurchaseRequest {
+  packageId: string;
+  userId: string;
+  duration: number;
+  paymentMethod: string;
+  currency: string;
 }
 
 class PackageService {
@@ -33,11 +42,32 @@ class PackageService {
   }
 
   async purchasePackage(packageId: string): Promise<{ subscriptionId: string }> {
-    const response = await apiClient.post<{ subscriptionId: string }>('/subscription', {
+    const userId = await getUserId();
+    if (!userId) {
+      throw new Error('User ID not found. Please log in again.');
+    }
+
+    const purchaseRequest: PurchaseRequest = {
       packageId,
-      duration: 12 // Annual subscription
-    });
-    return response.data;
+      userId,
+      duration: 12, // Annual subscription
+      paymentMethod: 'credit_card', // Default payment method
+      currency: 'USD' // Default currency
+    };
+
+    try {
+      const response = await apiClient.post<{ subscriptionId: string }>('/subscription', purchaseRequest);
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.data?.errors) {
+        const validationErrors = error.response.data.errors;
+        const errorMessage = Object.entries(validationErrors)
+          .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+          .join('\n');
+        throw new Error(`Validation failed: ${errorMessage}`);
+      }
+      throw error;
+    }
   }
 
   async getActiveSubscriptions(userId: string): Promise<{
