@@ -16,12 +16,14 @@ import PackageSelectionScreen from '../screens/main/PackageSelectionScreen';
 import LandingScreen from '../screens/main/LandingScreen';
 import LessonDetailsScreen from '../screens/LessonDetailsScreen';
 import PackageDetailsScreen from '../screens/PackageDetailsScreen';
+import PaymentScreen from '../screens/PaymentScreen';
 
 // Types
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
   PackageDetails: { packageId: string };
+  Payment: { packageId: string; packageName: string; amount: number };
 };
 
 export type AuthStackParamList = {
@@ -128,6 +130,15 @@ const AppNavigator = () => {
             options={{ 
               headerShown: true,
               title: 'Package Details',
+              presentation: 'modal'
+            }}
+          />
+          <Stack.Screen
+            name="Payment"
+            component={PaymentScreen}
+            options={{ 
+              headerShown: true,
+              title: 'Payment',
               presentation: 'modal'
             }}
           />

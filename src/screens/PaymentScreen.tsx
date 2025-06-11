@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { subscriptionApi } from '../services/api';
 import { useAppSelector } from '../store';
 
 interface PaymentDetails {
@@ -47,12 +46,8 @@ const PaymentScreen: React.FC = () => {
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Create subscription
-      await subscriptionApi.subscribe({
-        packageId: paymentDetails.packageId,
-        userId: user.id
-      });
-
+      // Store purchase in local storage or state management
+      // For now, we'll just show a success message
       Alert.alert(
         'Payment Successful',
         `Thank you for your purchase!\n\nYour payment of ${paymentDetails.amount} AZN for ${paymentDetails.packageName} has been processed successfully.\n\n(Note: This is a demo payment. No actual payment was processed.)`,
@@ -60,8 +55,27 @@ const PaymentScreen: React.FC = () => {
           {
             text: 'Go to Dashboard',
             onPress: () => {
-              navigation.navigate('MainTabs' as never);
-              navigation.navigate('Packages' as never);
+              // @ts-ignore - we know this navigation exists
+              navigation.reset({
+                index: 0,
+                routes: [
+                  { 
+                    name: 'Main',
+                    state: {
+                      routes: [
+                        {
+                          name: 'MainTabs',
+                          state: {
+                            routes: [
+                              { name: 'Packages' }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              });
             }
           }
         ]
@@ -69,19 +83,8 @@ const PaymentScreen: React.FC = () => {
       
     } catch (error: any) {
       console.error('Payment error:', error);
-      let errorMessage = 'Failed to process payment. Please try again.';
-      
-      if (error.response?.data?.errors) {
-        const validationErrors = error.response.data.errors;
-        errorMessage = Object.entries(validationErrors)
-          .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
-          .join('\n');
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      }
-      
-      setError(errorMessage);
-      Alert.alert('Error', errorMessage);
+      setError('Failed to process payment. Please try again.');
+      Alert.alert('Error', 'Failed to process payment. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -96,7 +99,29 @@ const PaymentScreen: React.FC = () => {
           <Text style={styles.errorMessage}>{error}</Text>
           <TouchableOpacity
             style={styles.button}
-            onPress={() => navigation.navigate('Packages' as never)}
+            onPress={() => {
+              // @ts-ignore - we know this navigation exists
+              navigation.reset({
+                index: 0,
+                routes: [
+                  { 
+                    name: 'Main',
+                    state: {
+                      routes: [
+                        {
+                          name: 'MainTabs',
+                          state: {
+                            routes: [
+                              { name: 'Packages' }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              });
+            }}
           >
             <Text style={styles.buttonText}>Back to Packages</Text>
           </TouchableOpacity>
@@ -152,7 +177,29 @@ const PaymentScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.linkButton}
-          onPress={() => navigation.navigate('Packages' as never)}
+          onPress={() => {
+            // @ts-ignore - we know this navigation exists
+            navigation.reset({
+              index: 0,
+              routes: [
+                { 
+                  name: 'Main',
+                  state: {
+                    routes: [
+                      {
+                        name: 'MainTabs',
+                        state: {
+                          routes: [
+                            { name: 'Packages' }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            });
+          }}
         >
           <Text style={styles.linkButtonText}>Cancel and Return to Packages</Text>
         </TouchableOpacity>
