@@ -1,5 +1,6 @@
 import apiClient from '../client';
 import { decodeToken } from '../../utils/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface AskQuestionRequest {
   lessonId: string;
@@ -21,7 +22,7 @@ class ChatbotService {
   async askQuestion(request: AskQuestionRequest): Promise<AskQuestionResponse> {
     try {
       // Check if token is expired
-      const token = await this.getToken();
+      const token = await AsyncStorage.getItem('accessToken');
       if (token) {
         const decoded = decodeToken(token);
         if (decoded && decoded.exp) {
@@ -32,7 +33,7 @@ class ChatbotService {
         }
       }
 
-      // Get a valid lesson ID from the first available course if using demo
+      // Get a valid lesson ID from the first available course
       let lessonId = request.lessonId;
       if (lessonId === 'demo') {
         try {
@@ -54,7 +55,11 @@ class ChatbotService {
       formData.append('lessonId', lessonId);
       formData.append('question', request.question);
       
-      const response = await apiClient.post<AskQuestionResponse>('/openai/ask', formData);
+      const response = await apiClient.post<AskQuestionResponse>('/openai/ask', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       return response.data;
     } catch (error: any) {
       console.error('Chatbot error:', error);
@@ -64,6 +69,8 @@ class ChatbotService {
       }
 
       if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
         const status = error.response.status;
         const data = error.response.data;
 
@@ -84,21 +91,12 @@ class ChatbotService {
             );
         }
       } else if (error.request) {
+        // The request was made but no response was received
         throw new ChatbotError('No response from server. Please check your internet connection.');
       } else {
+        // Something happened in setting up the request that triggered an Error
         throw new ChatbotError('An unexpected error occurred. Please try again.');
       }
-    }
-  }
-
-  private async getToken(): Promise<string | null> {
-    try {
-      // Use AsyncStorage or your preferred storage method
-      const token = await AsyncStorage.getItem('accessToken');
-      return token;
-    } catch (error) {
-      console.error('Error getting token:', error);
-      return null;
     }
   }
 }
