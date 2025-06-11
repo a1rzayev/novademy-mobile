@@ -121,7 +121,8 @@ const DashboardScreen = () => {
                 await Promise.all(crs.map(async c => {
                     try {
                         const lessonsRes = await lessonApi.getLessons(c.id);
-                        const sortedLessons = lessonsRes.data.sort((a, b) => a.order - b.order);
+                        const lessons = lessonsRes.data || [];
+                        const sortedLessons = Array.isArray(lessons) ? lessons.sort((a, b) => a.order - b.order) : [];
                         lessonsMapTemp[c.id] = sortedLessons;
                         console.log(`Lessons for course ${c.id}:`, sortedLessons);
                     } catch (err) {

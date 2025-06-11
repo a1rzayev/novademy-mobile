@@ -122,7 +122,19 @@ export const courseApi = {
 };
 
 export const lessonApi = {
-  getLessons: (courseId: string) => api.get(`/lesson/course/${courseId}`),
+  getLessons: async (courseId: string) => {
+    try {
+      // Format the course ID to match the backend format
+      const formattedCourseId = courseId.toLowerCase().trim();
+      console.log('Fetching lessons for course:', formattedCourseId);
+      const response = await api.get(`/lesson/course/${formattedCourseId}`);
+      console.log('Lessons response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error fetching lessons:', error);
+      throw error;
+    }
+  },
   getLesson: (id: string) => api.get(`/lesson/${id}`),
   createLesson: (data: any) => api.post('/lesson', data),
   updateLesson: (id: string, data: any) => api.put(`/lesson/${id}`, data),
@@ -149,10 +161,12 @@ export const packageApi = {
 export const subscriptionApi = {
   getActiveSubscriptions: async (userId: string) => {
     try {
-      // Remove any dashes from the GUID to match the backend format
-      const formattedUserId = userId.replace(/-/g, '');
+      // Format the user ID to match the backend format
+      const formattedUserId = userId.toLowerCase().trim();
+      console.log('Formatted user ID:', formattedUserId);
       const response = await api.get(`/subscription/active/${formattedUserId}`);
-      return response.data;
+      console.log('Subscription response:', response);
+      return response;
     } catch (error) {
       console.error('Error in getActiveSubscriptions:', error);
       throw error;
@@ -160,14 +174,16 @@ export const subscriptionApi = {
   },
   subscribe: async (data: { packageId: string; userId: string }) => {
     try {
-      // Remove any dashes from the GUIDs to match the backend format
-      const formattedUserId = data.userId.replace(/-/g, '');
-      const formattedPackageId = data.packageId.replace(/-/g, '');
+      // Format the IDs to match the backend format
+      const formattedUserId = data.userId.toLowerCase().trim();
+      const formattedPackageId = data.packageId.toLowerCase().trim();
+      console.log('Formatted IDs:', { userId: formattedUserId, packageId: formattedPackageId });
       const response = await api.post('/subscription/subscribe', {
         userId: formattedUserId,
         packageId: formattedPackageId
       });
-      return response.data;
+      console.log('Subscribe response:', response);
+      return response;
     } catch (error) {
       console.error('Error in subscribe:', error);
       throw error;
