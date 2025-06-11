@@ -1,277 +1,208 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
-import { Text, Card, Button, useTheme, ActivityIndicator, Searchbar, Chip, Divider } from 'react-native-paper';
-import packageService, { Package } from '../../api/services/packageService';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigation/AppNavigator';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { packageApi } from '../../services/api';
+import { useAppSelector } from '../../store';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+interface Package {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+}
 
-const PackageSelectionScreen = () => {
+const PackageSelectionScreen: React.FC = () => {
   const [packages, setPackages] = useState<Package[]>([]);
-  const [purchasedPackages, setPurchasedPackages] = useState<Package[]>([]);
-  const [availablePackages, setAvailablePackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const theme = useTheme();
-  const navigation = useNavigation<NavigationProp>();
-
-  const fetchPackages = async (query?: string) => {
-    try {
-      setError(null);
-      const fetchedPackages = await packageService.getPackages(query);
-      
-      // Check purchase status for each package
-      const packagesWithStatus = await Promise.all(
-        fetchedPackages.map(async (pkg) => {
-          const isPurchased = await packageService.isPackagePurchased(pkg.id);
-          return { ...pkg, isPurchased };
-        })
-      );
-      
-      // Sort packages into purchased and available
-      const purchased = packagesWithStatus.filter(pkg => pkg.isPurchased);
-      const available = packagesWithStatus.filter(pkg => !pkg.isPurchased);
-      
-      setPackages(packagesWithStatus);
-      setPurchasedPackages(purchased);
-      setAvailablePackages(available);
-    } catch (error: any) {
-      console.error('Error fetching packages:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to load packages';
-      setError(errorMessage);
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const [purchasing, setPurchasing] = useState<{ [key: string]: boolean }>({});
+  const navigation = useNavigation();
+  const user = useAppSelector((state) => state.auth.user);
 
   useEffect(() => {
     fetchPackages();
   }, []);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchPackages(searchQuery);
+  const fetchPackages = async () => {
+    try {
+      const response = await packageApi.getPackages();
+      setPackages(response.data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch packages');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    setLoading(true);
-    fetchPackages(query);
-  };
-
-  const handlePackagePress = (packageId: string) => {
-    if (!packageId) {
-      console.error('Package ID is missing');
+  const handleSelectPackage = (packageId: string, packageTitle: string, price: number) => {
+    if (!user) {
+      Alert.alert('Authentication Required', 'Please login to purchase packages.', [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Login',
+          onPress: () => navigation.navigate('Auth' as never),
+        },
+      ]);
       return;
     }
-    navigation.navigate('PackageDetails', { packageId });
+
+    setPurchasing((prev) => ({ ...prev, [packageId]: true }));
+    try {
+      navigation.navigate('Payment' as never, {
+        packageId,
+        packageName: packageTitle,
+        amount: price,
+      });
+    } catch (err) {
+      console.error('Failed to process package selection:', err);
+    } finally {
+      setPurchasing((prev) => ({ ...prev, [packageId]: false }));
+    }
   };
 
-  const renderPackageCard = (pkg: Package) => (
-    <Card 
-      key={pkg.id} 
-      style={styles.packageCard}
-      onPress={() => handlePackagePress(pkg.id)}
-    >
-      <Card.Content>
-        <View style={styles.packageHeader}>
-          <View style={styles.titleContainer}>
-            <Text variant="titleLarge" style={styles.packageTitle}>
-              {pkg.title}
-            </Text>
-            {pkg.isPurchased && (
-              <Chip
-                icon="check-circle"
-                style={[styles.purchasedChip, { backgroundColor: theme.colors.primary }]}
-                textStyle={{ color: 'white' }}
-              >
-                Purchased
-              </Chip>
-            )}
-          </View>
-          <Text variant="titleMedium" style={styles.price}>
-            ${pkg.price}
-          </Text>
-        </View>
-        <Text variant="bodyMedium" style={styles.description}>
-          {pkg.description}
-        </Text>
-        <View style={styles.footer}>
-          <View style={styles.courseCount}>
-            <MaterialCommunityIcons name="book-open-variant" size={16} color={theme.colors.primary} />
-            <Text variant="bodySmall" style={styles.courseCountText}>
-              {pkg.courseCount} Courses
-            </Text>
-          </View>
-          <Button
-            mode="contained"
-            onPress={() => handlePackagePress(pkg.id)}
-            style={styles.viewButton}
-          >
-            {pkg.isPurchased ? 'View Package' : 'View Details'}
-          </Button>
-        </View>
-      </Card.Content>
-    </Card>
-  );
-
-  if (loading && !refreshing) {
+  if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading packages...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Icon name="alert-circle" size={48} color="#ff4d4f" />
+          <Text style={styles.errorTitle}>Error</Text>
+          <Text style={styles.errorMessage}>{error}</Text>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={fetchPackages}
+          >
+            <Text style={styles.buttonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView 
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={styles.searchContainer}>
-        <Searchbar
-          placeholder="Search packages..."
-          onChangeText={handleSearch}
-          value={searchQuery}
-          style={styles.searchBar}
-        />
-      </View>
-
-      {error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Button mode="contained" onPress={() => fetchPackages()}>
-            Retry
-          </Button>
-        </View>
-      ) : (
-        <>
-          {purchasedPackages.length > 0 && (
-            <View style={styles.section}>
-              <Text variant="titleLarge" style={styles.sectionTitle}>
-                Your Packages
-              </Text>
-              {purchasedPackages.map(renderPackageCard)}
-            </View>
-          )}
-
-          {availablePackages.length > 0 && (
-            <View style={styles.section}>
-              <Text variant="titleLarge" style={styles.sectionTitle}>
-                Available Packages
-              </Text>
-              {availablePackages.map(renderPackageCard)}
-            </View>
-          )}
-
-          {packages.length === 0 && !loading && (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No packages found</Text>
-            </View>
-          )}
-        </>
-      )}
-    </ScrollView>
+    <View style={styles.container}>
+      <FlatList
+        data={packages}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={styles.packageCard}>
+            <Text style={styles.packageTitle}>{item.title}</Text>
+            <Text style={styles.packageDescription}>{item.description}</Text>
+            <Text style={styles.price}>{item.price} AZN</Text>
+            <TouchableOpacity
+              style={[styles.button, purchasing[item.id] && styles.buttonDisabled]}
+              onPress={() => handleSelectPackage(item.id, item.title, item.price)}
+              disabled={purchasing[item.id]}
+            >
+              {purchasing[item.id] ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Icon name="shopping" size={20} color="#fff" style={styles.buttonIcon} />
+                  <Text style={styles.buttonText}>Buy Now</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+        contentContainerStyle={styles.listContent}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  searchContainer: {
-    padding: 16,
     backgroundColor: '#fff',
   },
-  searchBar: {
-    elevation: 0,
-    backgroundColor: '#f5f5f5',
-  },
-  section: {
+  listContent: {
     padding: 16,
-  },
-  sectionTitle: {
-    marginBottom: 16,
-    fontWeight: 'bold',
   },
   packageCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
     elevation: 2,
-  },
-  packageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  titleContainer: {
-    flex: 1,
-    marginRight: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   packageTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: '#333',
+    marginBottom: 8,
   },
-  purchasedChip: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
+  packageDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
   },
   price: {
-    fontWeight: 'bold',
-    color: '#2196F3',
-  },
-  description: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#007AFF',
     marginBottom: 16,
-    color: '#666',
   },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  courseCount: {
+  button: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  courseCountText: {
-    marginLeft: 4,
-    color: '#666',
-  },
-  viewButton: {
-    borderRadius: 20,
-  },
-  loadingContainer: {
-    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
   errorContainer: {
-    padding: 16,
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
   },
-  errorText: {
-    color: 'red',
-    marginBottom: 16,
-    textAlign: 'center',
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ff4d4f',
+    marginTop: 16,
+    marginBottom: 8,
   },
-  emptyContainer: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: '#666',
+  errorMessage: {
     fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
   },
 });
 

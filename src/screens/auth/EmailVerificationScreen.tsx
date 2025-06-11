@@ -1,211 +1,179 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { TextInput, Button, Text, useTheme } from 'react-native-paper';
-import { useAppDispatch, useAppSelector } from '../../store';
-import { verifyEmail } from '../../store/slices/authSlice';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { AuthStackParamList } from '../../navigation/AppNavigator';
-import Toast from 'react-native-toast-message';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { authApi } from '../../services/api';
 
-type Props = NativeStackScreenProps<AuthStackParamList, 'EmailVerification'>;
-
-const EmailVerificationScreen = ({ route, navigation }: Props) => {
-  const [verificationCode, setVerificationCode] = useState('');
+const EmailVerificationScreen = () => {
+  const [code, setCode] = useState<string[]>(['', '', '', '']);
+  const [userId, setUserId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
-  const dispatch = useAppDispatch();
-  const theme = useTheme();
-  const { email, userId } = route.params;
+  const navigation = useNavigation();
+  const route = useRoute();
 
-  const showToast = (type: 'success' | 'error' | 'warning', message: string) => {
-    Toast.show({
-      type,
-      text1: type === 'success' ? 'Success' : type === 'warning' ? 'Warning' : 'Error',
-      text2: message,
-      position: 'top',
-      visibilityTime: 4000,
-      autoHide: true,
-      topOffset: Platform.OS === 'ios' ? 50 : 30,
-    });
+  useEffect(() => {
+    if (route.params?.userId) {
+      setUserId(route.params.userId);
+    } else {
+      Alert.alert(
+        'Error',
+        'User ID not provided. Please register again.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Register' as never) }]
+      );
+    }
+  }, [route.params]);
+
+  const handleInputChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return; // Only allow digits
+    
+    const newCode = [...code];
+    newCode[index] = value.slice(-1);
+    setCode(newCode);
   };
 
-  const validateCode = (code: string): boolean => {
-    // Remove any non-digit characters
-    const cleanCode = code.replace(/\D/g, '');
-    // Check if code is exactly 4 digits
-    return cleanCode.length === 4;
-  };
+  const handleSubmit = async () => {
+    const verificationCode = code.join('');
+    
+    if (verificationCode.length !== 4) {
+      Alert.alert('Error', 'Please enter the full 4-digit code.');
+      return;
+    }
 
-  const handleVerification = async () => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      Alert.alert('Error', 'Invalid user ID format. Please register again.');
+      setTimeout(() => navigation.navigate('Register' as never), 3000);
+      return;
+    }
+
+    const cleanCode = verificationCode.replace(/\D/g, '');
+    if (!/^\d{4}$/.test(cleanCode)) {
+      Alert.alert('Error', 'Invalid verification code format. Expected exactly 4 digits.');
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      if (!verificationCode) {
-        showToast('warning', 'Please enter the verification code');
-        return;
-      }
+      await authApi.verifyEmail({
+        userId: userId.toLowerCase(),
+        code: cleanCode
+      });
 
-      // Clean and validate the code
-      const cleanCode = verificationCode.replace(/\D/g, '');
-      if (!validateCode(cleanCode)) {
-        showToast('warning', 'Please enter a valid 4-digit verification code');
-        return;
-      }
+      Alert.alert(
+        'Success',
+        'Email verified successfully! Redirecting to login...',
+        [{ text: 'OK', onPress: () => navigation.navigate('Login' as never) }]
+      );
+    } catch (error: any) {
+      let errorMessage = 'Verification failed. Please try again.';
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
 
-      setIsLoading(true);
-      console.log('Verifying email with:', { userId, code: cleanCode });
-
-      try {
-        await dispatch(verifyEmail({ userId, code: cleanCode })).unwrap();
-        showToast('success', 'Email verified successfully! You can now login.');
-        
-        // Navigate to login after a short delay
-        setTimeout(() => {
-          navigation.replace('Login');
-        }, 1500);
-      } catch (error: any) {
-        console.error('Verification error:', error);
-        
-        // Handle specific error cases
-        if (typeof error === 'string') {
-          // This is our formatted error message from the thunk
-          showToast('warning', error);
-        } else if (error.response?.status === 400) {
-          const errorData = error.response.data;
-          if (errorData?.errors) {
-            const errorMessages = Object.entries(errorData.errors)
-              .map(([field, messages]) => {
-                if (field === '$.userId') {
-                  return 'Invalid user ID format';
-                }
-                if (field === 'request') {
-                  return 'Invalid verification request';
-                }
-                return `${field}: ${(messages as string[]).join(', ')}`;
-              })
-              .join('\n');
-            showToast('warning', errorMessages);
-          } else {
-            showToast('warning', errorData?.message || 'Invalid verification code');
-          }
-        } else if (error.response?.status === 404) {
-          showToast('error', 'Verification code expired. Please request a new one.');
-        } else if (!error.response) {
-          showToast('error', 'Network error. Please check your connection and try again.');
-        } else {
-          showToast('error', 'Verification failed. Please try again.');
+        if (errorMessage.includes('already verified')) {
+          Alert.alert(
+            'Info',
+            'This email is already verified. You can now login.',
+            [{ text: 'OK', onPress: () => navigation.navigate('Login' as never) }]
+          );
+          return;
         }
       }
-    } catch (error) {
-      console.error('Unexpected error during verification:', error);
-      showToast('error', 'An unexpected error occurred. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const handleResendCode = async () => {
-    try {
-      setIsLoading(true);
-      // TODO: Implement resend verification code functionality
-      showToast('success', 'A new verification code has been sent to your email.');
-    } catch (error) {
-      console.error('Resend code error:', error);
-      showToast('error', 'Failed to resend verification code. Please try again.');
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <View style={styles.content}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Verify Your Email
-        </Text>
-
-        <Text style={styles.description}>
-          Please enter the 4-digit verification code sent to {email}
-        </Text>
-        
-        <TextInput
-          label="Verification Code"
-          value={verificationCode}
-          onChangeText={(text) => {
-            // Only allow digits and limit to 4 characters
-            const cleanText = text.replace(/\D/g, '').slice(0, 4);
-            setVerificationCode(cleanText);
-          }}
-          keyboardType="number-pad"
-          maxLength={4}
-          style={styles.input}
-          disabled={isLoading}
-          error={!validateCode(verificationCode) && verificationCode.length > 0}
-          placeholder="Enter 4-digit code"
-        />
-
-        <Button
-          mode="contained"
-          onPress={handleVerification}
-          loading={isLoading}
-          disabled={isLoading || !validateCode(verificationCode)}
-          style={styles.button}
-        >
-          Verify Email
-        </Button>
-
-        <Button
-          mode="text"
-          onPress={handleResendCode}
-          style={styles.link}
-          disabled={isLoading}
-        >
-          Didn't receive the code? Resend
-        </Button>
-
-        <Button
-          mode="text"
-          onPress={() => navigation.navigate('Login')}
-          style={styles.link}
-          disabled={isLoading}
-        >
-          Back to Login
-        </Button>
+    <View style={styles.container}>
+      <Text style={styles.title}>Email Verification</Text>
+      <Text style={styles.subtitle}>Please enter the 4-digit code sent to your email</Text>
+      
+      <View style={styles.codeContainer}>
+        {[0, 1, 2, 3].map((index) => (
+          <TextInput
+            key={index}
+            style={styles.codeInput}
+            maxLength={1}
+            keyboardType="number-pad"
+            value={code[index]}
+            onChangeText={(value) => handleInputChange(index, value)}
+            editable={!isLoading}
+          />
+        ))}
       </View>
-    </KeyboardAvoidingView>
+
+      <TouchableOpacity
+        style={[styles.button, isLoading && styles.buttonDisabled]}
+        onPress={handleSubmit}
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>Verify Email</Text>
+        )}
+      </TouchableOpacity>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-  },
-  content: {
-    flex: 1,
     padding: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  description: {
-    textAlign: 'center',
-    marginBottom: 24,
-    opacity: 0.7,
-  },
-  input: {
-    marginBottom: 16,
-    textAlign: 'center',
-    letterSpacing: 8,
     fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  codeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 30,
+  },
+  codeInput: {
+    width: 60,
+    height: 60,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    marginHorizontal: 5,
+    fontSize: 24,
+    textAlign: 'center',
   },
   button: {
-    marginTop: 8,
+    backgroundColor: '#007AFF',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
   },
-  link: {
-    marginTop: 16,
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
