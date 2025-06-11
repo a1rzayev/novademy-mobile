@@ -5,6 +5,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { Text, Card, Button, useTheme } from 'react-native-paper';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -12,6 +13,8 @@ import { RootStackParamList } from '../types/navigation';
 import { Chatbot } from '../components/Chatbot';
 import courseService, { Lesson } from '../api/services/courseService';
 import { useAppSelector } from '../store';
+import { WebView } from 'react-native-webview';
+import { Video } from 'expo-av';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LessonDetails'>;
 
@@ -20,8 +23,11 @@ export const LessonDetailsScreen = ({ route, navigation }: Props) => {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   const theme = useTheme();
   const user = useAppSelector((state) => state.auth.user);
+  const videoRef = React.useRef(null);
+  const [status, setStatus] = React.useState({});
 
   useEffect(() => {
     fetchLesson();
@@ -41,6 +47,47 @@ export const LessonDetailsScreen = ({ route, navigation }: Props) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderVideoPlayer = () => {
+    if (!lesson?.videoUrl) return null;
+
+    // Check if the video URL is a YouTube URL
+    if (lesson.videoUrl.includes('youtube.com') || lesson.videoUrl.includes('youtu.be')) {
+      // Extract video ID from YouTube URL
+      const videoId = lesson.videoUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/)?.[1];
+      
+      if (!videoId) return null;
+
+      return (
+        <View style={styles.videoContainer}>
+          <WebView
+            style={styles.videoPlayer}
+            source={{
+              uri: `https://www.youtube.com/embed/${videoId}?playsinline=1`,
+            }}
+            allowsFullscreenVideo
+            javaScriptEnabled
+            domStorageEnabled
+          />
+        </View>
+      );
+    }
+
+    // For direct video URLs
+    return (
+      <View style={styles.videoContainer}>
+        <Video
+          ref={videoRef}
+          style={styles.videoPlayer}
+          source={{ uri: lesson.videoUrl }}
+          useNativeControls
+          resizeMode="contain"
+          isLooping
+          onPlaybackStatusUpdate={status => setStatus(() => status)}
+        />
+      </View>
+    );
   };
 
   if (loading) {
@@ -76,6 +123,8 @@ export const LessonDetailsScreen = ({ route, navigation }: Props) => {
               {lesson.description}
             </Text>
             
+            {renderVideoPlayer()}
+
             <View style={styles.detailsContainer}>
               <View style={styles.detailItem}>
                 <Text variant="bodyMedium" style={styles.detailLabel}>
@@ -101,30 +150,16 @@ export const LessonDetailsScreen = ({ route, navigation }: Props) => {
                 </Text>
               </View>
             </View>
-
-            {lesson.videoUrl && (
-              <View style={styles.videoContainer}>
-                <Text variant="titleMedium" style={styles.videoTitle}>
-                  Lesson Video
-                </Text>
-                {/* Add video player component here */}
-                <Text style={styles.videoPlaceholder}>
-                  Video player will be implemented here
-                </Text>
-              </View>
-            )}
           </Card.Content>
         </Card>
 
-        <Card style={styles.chatbotCard}>
-          <Card.Content>
-            <Chatbot
-              lessonId={lessonId}
-              title="Lesson Assistant"
-              subtitle="Ask questions about this lesson"
-            />
-          </Card.Content>
-        </Card>
+        <Chatbot
+          lessonId={lessonId}
+          title="Lesson Assistant"
+          subtitle="Ask questions about this lesson"
+          isFloating={true}
+          onClose={() => setIsChatbotOpen(false)}
+        />
       </ScrollView>
     </View>
   );
@@ -172,7 +207,7 @@ const styles = StyleSheet.create({
   detailsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginTop: 16,
     padding: 12,
     backgroundColor: '#F8F9FA',
     borderRadius: 8,
@@ -188,25 +223,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   videoContainer: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#F8F9FA',
+    marginVertical: 16,
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#000',
     borderRadius: 8,
+    overflow: 'hidden',
   },
-  videoTitle: {
-    marginBottom: 8,
-  },
-  videoPlaceholder: {
-    textAlign: 'center',
-    padding: 20,
-    backgroundColor: '#E9ECEF',
-    borderRadius: 4,
-    color: '#6C757D',
-  },
-  chatbotCard: {
-    margin: 16,
-    marginTop: 8,
-    height: 400, // Fixed height for the chatbot
+  videoPlayer: {
+    flex: 1,
   },
 });
 
