@@ -16,7 +16,6 @@ import PackageSelectionScreen from '../screens/main/PackageSelectionScreen';
 import LandingScreen from '../screens/main/LandingScreen';
 import LessonDetailsScreen from '../screens/LessonDetailsScreen';
 import PackageDetailsScreen from '../screens/PackageDetailsScreen';
-import MyPackagesScreen from '../screens/main/MyPackagesScreen';
 
 // Types
 export type RootStackParamList = {
@@ -40,7 +39,6 @@ export type MainStackParamList = {
 export type MainTabParamList = {
   Dashboard: undefined;
   Packages: undefined;
-  MyPackages: undefined;
   Profile: undefined;
 };
 
@@ -85,16 +83,6 @@ const MainTabNavigator = () => (
         tabBarIcon: ({ color, size }) => (
           <MaterialCommunityIcons name="package-variant" size={size} color={color} />
         ),
-      }}
-    />
-    <Tab.Screen
-      name="MyPackages"
-      component={MyPackagesScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <MaterialCommunityIcons name="package-variant-closed" size={size} color={color} />
-        ),
-        tabBarLabel: 'My Packages',
       }}
     />
     <Tab.Screen
