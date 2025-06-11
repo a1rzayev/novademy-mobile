@@ -6,12 +6,15 @@ import { useAppDispatch, useAppSelector } from '../../store';
 import { login } from '../../store/slices/authSlice';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AppNavigator';
+import { Ionicons } from '@expo/vector-icons';
+import { TouchableOpacity } from 'react-native';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 const LoginScreen = ({ navigation }: Props) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const dispatch = useAppDispatch();
   const { loading, error } = useAppSelector((state) => state.auth);
   const theme = useTheme();
@@ -53,15 +56,28 @@ const LoginScreen = ({ navigation }: Props) => {
             error={!!error}
           />
           
-          <TextInput
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            style={styles.input}
-            disabled={loading}
-            error={!!error}
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              style={[styles.input, styles.passwordInput]}
+              disabled={loading}
+              error={!!error}
+            />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowPassword(!showPassword)}
+              disabled={loading}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={24}
+                color="#666"
+              />
+            </TouchableOpacity>
+          </View>
 
           {error && (
             <Text style={[styles.error, { color: theme.colors.error }]}>
@@ -120,6 +136,20 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: 16,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: 10,
+    padding: 10,
   },
   loginButton: {
     marginTop: 8,
