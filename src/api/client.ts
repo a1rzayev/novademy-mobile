@@ -4,9 +4,7 @@ import { Platform } from 'react-native';
 
 // Create axios instance with base configuration
 const apiClient = axios.create({
-  baseURL: Platform.OS === 'android' 
-    ? 'http://10.0.2.2:5258/api/v1'  // Android emulator
-    : 'http://localhost:5258/api/v1', // iOS simulator and web
+  baseURL: 'https://novademy-api.azurewebsites.net/api/v1',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
