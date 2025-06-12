@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Text, Card, Button, TextInput, useTheme, Divider } from 'react-native-paper';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import authService from '../../api/services/authService';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigation/AppNavigator';
+
+type ProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const ProfileScreen = () => {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const theme = useTheme();
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [loading, setLoading] = useState(false);
@@ -20,6 +26,10 @@ const ProfileScreen = () => {
       console.error('Logout failed:', error);
       Alert.alert('Error', 'Failed to logout. Please try again.');
     }
+  };
+
+  const handleEditProfile = () => {
+    navigation.navigate('EditProfile');
   };
 
   const handleUpdateProfile = async () => {
@@ -103,11 +113,11 @@ const ProfileScreen = () => {
             
             <Button
               mode="outlined"
-              onPress={() => setIsEditing(!isEditing)}
+              onPress={handleEditProfile}
               style={styles.button}
               disabled={loading}
             >
-              {isEditing ? 'Cancel' : 'Edit Profile'}
+              Edit Profile
             </Button>
 
             {isEditing && (
