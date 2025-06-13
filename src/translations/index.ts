@@ -11,6 +11,8 @@ export const translations = {
       loading: 'Loading...',
       error: 'Error',
       success: 'Success',
+      dashboard: 'Dashboard',
+      packages: 'Packages',
     },
     settings: {
       language: 'Language',
@@ -40,6 +42,8 @@ export const translations = {
       loading: 'Загрузка...',
       error: 'Ошибка',
       success: 'Успешно',
+      dashboard: 'Панель управления',
+      packages: 'Пакеты',
     },
     settings: {
       language: 'Язык',
@@ -69,6 +73,8 @@ export const translations = {
       loading: 'Yüklənir...',
       error: 'Xəta',
       success: 'Uğurlu',
+      dashboard: 'İdarə paneli',
+      packages: 'Paketlər',
     },
     settings: {
       language: 'Dil',

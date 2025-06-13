@@ -90,6 +90,7 @@ const MainTabs = () => {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="view-dashboard" size={size} color={color} />
           ),
+          title: getTranslation('common.dashboard', currentLanguage),
         }}
       />
       <Tab.Screen
@@ -99,6 +100,7 @@ const MainTabs = () => {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="package-variant" size={size} color={color} />
           ),
+          title: getTranslation('common.packages', currentLanguage),
         }}
       />
       <Tab.Screen
