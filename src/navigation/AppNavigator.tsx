@@ -12,6 +12,7 @@ import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
 // Main Screens
 import DashboardScreen from '../screens/main/DashboardScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
+import EditProfileScreen from '../screens/main/EditProfileScreen';
 import PackageSelectionScreen from '../screens/main/PackageSelectionScreen';
 import LandingScreen from '../screens/main/LandingScreen';
 import LessonDetailsScreen from '../screens/LessonDetailsScreen';
@@ -24,6 +25,7 @@ export type RootStackParamList = {
   Main: undefined;
   PackageDetails: { packageId: string };
   Payment: { packageId: string; packageName: string; amount: number };
+  EditProfile: undefined;
 };
 
 export type AuthStackParamList = {
@@ -139,6 +141,15 @@ const AppNavigator = () => {
             options={{ 
               headerShown: true,
               title: 'Payment',
+              presentation: 'modal'
+            }}
+          />
+          <Stack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
+            options={{ 
+              headerShown: true,
+              title: 'Edit Profile',
               presentation: 'modal'
             }}
           />

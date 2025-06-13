@@ -361,6 +361,38 @@ class AuthService {
       throw error;
     }
   }
+
+  async updateProfile(formData: FormData): Promise<AuthResponse> {
+    try {
+      const userId = await AsyncStorage.getItem('userId');
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+
+      const response = await apiClient.put<AuthResponse>(`/user/${userId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Store the new access token
+      if (response.data.accessToken) {
+        await AsyncStorage.setItem('authToken', response.data.accessToken);
+      }
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Profile update error:', {
+        message: error.message,
+        response: {
+          status: error.response?.status,
+          data: error.response?.data,
+          headers: error.response?.headers
+        }
+      });
+      throw error;
+    }
+  }
 }
 
 export default new AuthService(); 
