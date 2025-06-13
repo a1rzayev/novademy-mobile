@@ -9,7 +9,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const EditProfileScreen = () => {
+interface EditProfileScreenProps {
+  onSuccess?: () => void;
+}
+
+const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onSuccess }) => {
   const navigation = useNavigation();
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
@@ -125,10 +129,23 @@ const EditProfileScreen = () => {
       
       if (response?.accessToken) {
         await AsyncStorage.setItem('authToken', response.accessToken);
+        
+        // Fetch fresh user data after successful update
+        const updatedUserData = await authService.getCurrentUser();
+        if (updatedUserData) {
+          dispatch({ type: 'auth/setUser', payload: updatedUserData });
+        }
       }
 
-      Alert.alert('Success', 'Profile updated successfully');
-      navigation.goBack();
+      Alert.alert('Success', 'Profile updated successfully', [
+        {
+          text: 'OK',
+          onPress: () => {
+            onSuccess?.();
+            navigation.goBack();
+          }
+        }
+      ]);
     } catch (error: any) {
       console.error('Profile update error:', error);
       if (error.response?.data?.errors) {
