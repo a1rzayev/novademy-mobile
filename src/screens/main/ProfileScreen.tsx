@@ -8,12 +8,14 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import EditProfileScreen from './EditProfileScreen';
+import { getTranslation } from '../../translations';
 
 type ProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const ProfileScreen = () => {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
+  const currentLanguage = useAppSelector((state) => state.language.currentLanguage);
   const theme = useTheme();
   const navigation = useNavigation<ProfileScreenNavigationProp>();
   const [isEditing, setIsEditing] = useState(false);
@@ -28,7 +30,10 @@ const ProfileScreen = () => {
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
-      Alert.alert('Error', 'Failed to fetch user data');
+      Alert.alert(
+        getTranslation('common.error', currentLanguage),
+        getTranslation('common.error', currentLanguage)
+      );
     } finally {
       setLoading(false);
     }
@@ -46,7 +51,10 @@ const ProfileScreen = () => {
       await dispatch(logout()).unwrap();
     } catch (error) {
       console.error('Logout failed:', error);
-      Alert.alert('Error', 'Failed to logout. Please try again.');
+      Alert.alert(
+        getTranslation('common.error', currentLanguage),
+        getTranslation('common.error', currentLanguage)
+      );
     }
   };
 
@@ -71,7 +79,7 @@ const ProfileScreen = () => {
   if (!user) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <Text>Loading...</Text>
+        <Text>{getTranslation('common.loading', currentLanguage)}</Text>
       </View>
     );
   }
@@ -96,25 +104,41 @@ const ProfileScreen = () => {
         </View>
 
         <View style={styles.infoSection}>
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>Username</Text>
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+            {getTranslation('profile.username', currentLanguage)}
+          </Text>
           <Text style={[styles.value, { color: theme.colors.onSurface }]}>{user.username}</Text>
 
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>First Name</Text>
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+            {getTranslation('profile.firstName', currentLanguage)}
+          </Text>
           <Text style={[styles.value, { color: theme.colors.onSurface }]}>{user.firstName}</Text>
 
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>Last Name</Text>
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+            {getTranslation('profile.lastName', currentLanguage)}
+          </Text>
           <Text style={[styles.value, { color: theme.colors.onSurface }]}>{user.lastName}</Text>
 
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>Email</Text>
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+            {getTranslation('profile.email', currentLanguage)}
+          </Text>
           <Text style={[styles.value, { color: theme.colors.onSurface }]}>{user.email}</Text>
 
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>Phone Number</Text>
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+            {getTranslation('profile.phoneNumber', currentLanguage)}
+          </Text>
           <Text style={[styles.value, { color: theme.colors.onSurface }]}>{user.phoneNumber}</Text>
 
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>Group</Text>
-          <Text style={[styles.value, { color: theme.colors.onSurface }]}>Group {user.group}</Text>
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+            {getTranslation('profile.group', currentLanguage)}
+          </Text>
+          <Text style={[styles.value, { color: theme.colors.onSurface }]}>
+            {getTranslation('profile.group', currentLanguage)} {user.group}
+          </Text>
 
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>Sector</Text>
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+            {getTranslation('profile.sector', currentLanguage)}
+          </Text>
           <Text style={[styles.value, { color: theme.colors.onSurface }]}>{user.sector}</Text>
         </View>
 
@@ -124,7 +148,7 @@ const ProfileScreen = () => {
           style={styles.editButton}
           loading={loading}
         >
-          Edit Profile
+          {getTranslation('profile.editProfile', currentLanguage)}
         </Button>
       </View>
     </ScrollView>
