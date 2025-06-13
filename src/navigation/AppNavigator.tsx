@@ -2,7 +2,8 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAppSelector } from '../store';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { getTranslation } from '../translations';
 
 // Auth Screens
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -18,6 +19,7 @@ import LandingScreen from '../screens/main/LandingScreen';
 import LessonDetailsScreen from '../screens/LessonDetailsScreen';
 import PackageDetailsScreen from '../screens/PackageDetailsScreen';
 import PaymentScreen from '../screens/PaymentScreen';
+import SettingsScreen from '../screens/main/SettingsScreen';
 
 // Types
 export type RootStackParamList = {
@@ -44,6 +46,7 @@ export type MainTabParamList = {
   Dashboard: undefined;
   Packages: undefined;
   Profile: undefined;
+  Settings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -59,53 +62,68 @@ const AuthNavigator = () => (
   </AuthStack.Navigator>
 );
 
-const MainTabNavigator = () => (
-  <Tab.Navigator
-    screenOptions={{
-      tabBarActiveTintColor: '#2196F3',
-      tabBarInactiveTintColor: 'gray',
-      tabBarStyle: {
-        paddingBottom: 5,
-        paddingTop: 5,
-      },
-      headerShown: false,
-    }}
-  >
-    <Tab.Screen
-      name="Dashboard"
-      component={DashboardScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <MaterialCommunityIcons name="view-dashboard" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Packages"
-      component={PackageSelectionScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <MaterialCommunityIcons name="package-variant" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Profile"
-      component={ProfileScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <MaterialCommunityIcons name="account" size={size} color={color} />
-        ),
-      }}
-    />
-  </Tab.Navigator>
-);
+const MainTabs = () => {
+  const currentLanguage = useAppSelector((state) => state.language.currentLanguage);
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
+
+          if (route.name === 'Profile') {
+            iconName = focused ? 'person' : 'person-outline';
+          } else if (route.name === 'Settings') {
+            iconName = focused ? 'settings' : 'settings-outline';
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: 'gray',
+      })}
+    >
+      <Tab.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="view-dashboard" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Packages"
+        component={PackageSelectionScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="package-variant" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          title: getTranslation('common.profile', currentLanguage),
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          title: getTranslation('common.settings', currentLanguage),
+        }}
+      />
+    </Tab.Navigator>
+  );
+};
 
 const MainNavigator = () => (
   <MainStack.Navigator>
     <MainStack.Screen
       name="MainTabs"
-      component={MainTabNavigator}
+      component={MainTabs}
       options={{ headerShown: false }}
     />
     <MainStack.Screen
