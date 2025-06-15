@@ -134,18 +134,12 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onSuccess }) => {
         const updatedUserData = await authService.getCurrentUser();
         if (updatedUserData) {
           dispatch({ type: 'auth/setUser', payload: updatedUserData });
+          // Call onSuccess before navigation to ensure data is updated
+          onSuccess?.();
+          // Navigate back to profile screen
+          navigation.navigate('Profile' as never);
         }
       }
-
-      Alert.alert('Success', 'Profile updated successfully', [
-        {
-          text: 'OK',
-          onPress: () => {
-            onSuccess?.();
-            navigation.goBack();
-          }
-        }
-      ]);
     } catch (error: any) {
       console.error('Profile update error:', error);
       if (error.response?.data?.errors) {

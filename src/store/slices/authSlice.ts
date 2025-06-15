@@ -1,14 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../api/client';
-import authService from '../../api/services/authService';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  isVerified: boolean;
-}
+import authService, { User } from '../../api/services/authService';
 
 interface AuthState {
   user: User | null;
