@@ -178,7 +178,7 @@ export const subscriptionApi = {
       const formattedUserId = data.userId.toLowerCase().trim();
       const formattedPackageId = data.packageId.toLowerCase().trim();
       console.log('Formatted IDs:', { userId: formattedUserId, packageId: formattedPackageId });
-      const response = await api.post('/subscription/subscribe', {
+      const response = await api.post('/subscription', {
         userId: formattedUserId,
         packageId: formattedPackageId
       });

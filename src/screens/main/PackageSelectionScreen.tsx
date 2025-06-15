@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { packageApi } from '../../services/api';
+import { packageApi, subscriptionApi } from '../../services/api';
 import { useAppSelector } from '../../store';
 
 interface Package {
@@ -26,8 +26,31 @@ const PackageSelectionScreen: React.FC = () => {
 
   const fetchPackages = async () => {
     try {
-      const response = await packageApi.getPackages();
-      setPackages(response.data);
+      setLoading(true);
+      setError(null);
+
+      // Fetch all packages
+      const packagesResponse = await packageApi.getPackages();
+      const allPackages = packagesResponse.data;
+
+      // If user is logged in, fetch their active subscriptions
+      if (user) {
+        try {
+          const subscriptionsResponse = await subscriptionApi.getActiveSubscriptions(user.id);
+          const purchasedPackageIds = new Set(subscriptionsResponse.data.map((sub: any) => sub.packageId));
+          
+          // Filter out purchased packages
+          const availablePackages = allPackages.filter(pkg => !purchasedPackageIds.has(pkg.id));
+          setPackages(availablePackages);
+        } catch (err: any) {
+          // If there's an error fetching subscriptions, show all packages
+          console.warn('Error fetching subscriptions:', err);
+          setPackages(allPackages);
+        }
+      } else {
+        // If user is not logged in, show all packages
+        setPackages(allPackages);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch packages');
     } finally {
@@ -91,8 +114,38 @@ const PackageSelectionScreen: React.FC = () => {
     );
   }
 
+  if (packages.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Icon name="package-variant" size={48} color="#666" />
+          <Text style={styles.emptyTitle}>No Packages Available</Text>
+          <Text style={styles.emptyMessage}>
+            {user ? "You've purchased all available packages!" : "Please login to see available packages."}
+          </Text>
+          <TouchableOpacity
+            style={styles.reloadButton}
+            onPress={fetchPackages}
+          >
+            <Icon name="refresh" size={20} color="#007AFF" style={styles.reloadButtonIcon} />
+            <Text style={styles.reloadButtonText}>Reload</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.reloadButton}
+          onPress={fetchPackages}
+        >
+          <Icon name="refresh" size={20} color="#007AFF" style={styles.reloadButtonIcon} />
+          <Text style={styles.reloadButtonText}>Reload</Text>
+        </TouchableOpacity>
+      </View>
       <FlatList
         data={packages}
         keyExtractor={(item) => item.id}
@@ -127,6 +180,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  reloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  reloadButtonIcon: {
+    marginRight: 4,
+  },
+  reloadButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   listContent: {
     padding: 16,
@@ -199,6 +275,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   errorMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyMessage: {
     fontSize: 16,
     color: '#666',
     textAlign: 'center',

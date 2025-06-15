@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useAppSelector } from '../store';
+import { useAppSelector, useAppDispatch } from '../store';
+import { addSubscription } from '../store/slices/subscriptionSlice';
+import { subscriptionApi } from '../services/api';
 
 interface PaymentDetails {
   packageId: string;
@@ -16,6 +18,7 @@ const PaymentScreen: React.FC = () => {
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
   const navigation = useNavigation();
   const route = useRoute();
+  const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
 
   useEffect(() => {
@@ -43,14 +46,30 @@ const PaymentScreen: React.FC = () => {
     setError(null);
     
     try {
-      // Simulate payment processing
+      // Simulate payment processing delay
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Store purchase in local storage or state management
-      // For now, we'll just show a success message
+      // Create subscription in backend
+      const response = await subscriptionApi.subscribe({
+        userId: user.id,
+        packageId: paymentDetails.packageId
+      });
+      
+      // Add subscription to Redux store
+      const newSubscription = {
+        id: response.data.id,
+        userId: user.id,
+        packageId: paymentDetails.packageId,
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year from now
+        isActive: true
+      };
+      
+      dispatch(addSubscription(newSubscription));
+      
       Alert.alert(
         'Payment Successful',
-        `Thank you for your purchase!\n\nYour payment of ${paymentDetails.amount} AZN for ${paymentDetails.packageName} has been processed successfully.\n\n(Note: This is a demo payment. No actual payment was processed.)`,
+        `Thank you for your purchase!\n\nYour payment of ${paymentDetails.amount} AZN for ${paymentDetails.packageName} has been processed successfully.`,
         [
           {
             text: 'Go to Dashboard',
@@ -83,8 +102,8 @@ const PaymentScreen: React.FC = () => {
       
     } catch (error: any) {
       console.error('Payment error:', error);
-      setError('Failed to process payment. Please try again.');
-      Alert.alert('Error', 'Failed to process payment. Please try again.');
+      setError(error.message || 'Failed to process payment. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to process payment. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -154,11 +173,9 @@ const PaymentScreen: React.FC = () => {
             <Text style={styles.detailLabel}>Amount:</Text>
             <Text style={styles.detailValue}>{paymentDetails.amount} AZN</Text>
           </View>
-          
-          <Text style={styles.demoText}>
-            This is a demo payment. No actual payment will be processed.
-          </Text>
         </View>
+
+        <Text style={styles.demoNote}>This is a demo payment. No real payment will be processed.</Text>
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
@@ -242,11 +259,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  demoText: {
+  demoNote: {
     fontSize: 14,
     color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
     fontStyle: 'italic',
-    marginTop: 8,
   },
   button: {
     backgroundColor: '#007AFF',
