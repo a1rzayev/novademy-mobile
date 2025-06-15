@@ -27,6 +27,21 @@ const ProfileScreen = () => {
       const userData = await authService.getCurrentUser();
       if (userData) {
         dispatch({ type: 'auth/setUser', payload: userData });
+      } else {
+        // If no user data is returned, user might be logged out
+        Alert.alert(
+          getTranslation('common.error', currentLanguage),
+          getTranslation('common.sessionExpired', currentLanguage),
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                dispatch(logout());
+                navigation.navigate('Auth' as never);
+              }
+            }
+          ]
+        );
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
