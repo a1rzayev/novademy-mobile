@@ -26,7 +26,8 @@ interface ChatbotProps {
   title?: string;
   subtitle?: string;
   isFloating?: boolean;
-  onClose?: () => void;
+  visible: boolean;
+  onClose: () => void;
 }
 
 export const Chatbot: React.FC<ChatbotProps> = ({
@@ -34,12 +35,12 @@ export const Chatbot: React.FC<ChatbotProps> = ({
   title = 'Lesson Assistant',
   subtitle = 'Ask questions about the current lesson',
   isFloating = false,
+  visible,
   onClose,
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isOpen, setIsOpen] = useState(!isFloating);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const scrollToBottom = () => {
@@ -101,13 +102,6 @@ export const Chatbot: React.FC<ChatbotProps> = ({
     }
   };
 
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
-    if (!isOpen) {
-      scrollToBottom();
-    }
-  };
-
   const renderMessage = (message: Message) => (
     <View
       key={message.id}
@@ -151,88 +145,77 @@ export const Chatbot: React.FC<ChatbotProps> = ({
     </View>
   );
 
-  const renderChatContent = () => (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{title}</Text>
-        <Text style={styles.headerSubtitle}>{subtitle}</Text>
-        {isFloating && (
-          <TouchableOpacity onPress={onClose || toggleChat} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#666" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-      >
-        {messages.length === 0 && renderWelcomeMessage()}
-        {messages.map(renderMessage)}
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
-          </View>
-        )}
-      </ScrollView>
-
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Ask a question..."
-          placeholderTextColor="#999"
-          multiline
-          maxLength={500}
-          editable={!isLoading}
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, (!input.trim() || isLoading) && styles.sendButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={!input.trim() || isLoading}
-        >
-          <Ionicons
-            name="send"
-            size={24}
-            color={!input.trim() || isLoading ? '#999' : '#007AFF'}
-          />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
-  );
-
-  if (isFloating) {
-    return (
-      <>
+  return (
+    <>
+      {isFloating && !visible && (
         <TouchableOpacity
           style={styles.floatingButton}
-          onPress={toggleChat}
-          activeOpacity={0.8}
+          onPress={() => onClose()}
         >
           <Ionicons name="chatbubble" size={24} color="#FFF" />
         </TouchableOpacity>
+      )}
 
-        <Modal
-          visible={isOpen}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={toggleChat}
-        >
-          <View style={styles.modalContainer}>
-            {renderChatContent()}
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={onClose}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.container}>
+            <View style={styles.header}>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={onClose}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={24} color="#2C3E50" />
+              </TouchableOpacity>
+              <View>
+                <Text style={styles.headerTitle}>{title}</Text>
+                <Text style={styles.headerSubtitle}>{subtitle}</Text>
+              </View>
+            </View>
+
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.messagesContainer}
+              contentContainerStyle={styles.messagesContent}
+            >
+              {messages.length === 0 && renderWelcomeMessage()}
+              {messages.map(renderMessage)}
+              {isLoading && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#007AFF" />
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                value={input}
+                onChangeText={setInput}
+                placeholder="Ask a question..."
+                placeholderTextColor="#999"
+                multiline
+                maxLength={500}
+                editable={!isLoading}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, (!input.trim() || isLoading) && styles.sendButtonDisabled]}
+                onPress={handleSubmit}
+                disabled={!input.trim() || isLoading}
+              >
+                <Ionicons name="send" size={24} color="#007AFF" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </Modal>
-      </>
-    );
-  }
-
-  return renderChatContent();
+        </View>
+      </Modal>
+    </>
+  );
 };
 
 const styles = StyleSheet.create({
@@ -263,15 +246,20 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 16,
+    paddingTop: 48,
     backgroundColor: '#F8F9FA',
     borderBottomWidth: 1,
     borderBottomColor: '#E9ECEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#2C3E50',
     textAlign: 'center',
+    flex: 1,
   },
   headerSubtitle: {
     fontSize: 14,
@@ -281,9 +269,10 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     position: 'absolute',
-    right: 16,
-    top: 16,
-    padding: 4,
+    left: 16,
+    top: 48,
+    padding: 8,
+    zIndex: 1,
   },
   messagesContainer: {
     flex: 1,

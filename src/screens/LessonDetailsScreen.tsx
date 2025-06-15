@@ -154,11 +154,12 @@ export const LessonDetailsScreen = ({ route, navigation }: Props) => {
         </Card>
 
         <Chatbot
+          visible={isChatbotOpen}
           lessonId={lessonId}
           title="Lesson Assistant"
           subtitle="Ask questions about this lesson"
           isFloating={true}
-          onClose={() => setIsChatbotOpen(false)}
+          onClose={() => setIsChatbotOpen(!isChatbotOpen)}
         />
       </ScrollView>
     </View>
